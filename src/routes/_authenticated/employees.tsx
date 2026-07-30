@@ -2,12 +2,24 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { useServerFn } from "@tanstack/react-start";
+import { UserPlus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminOnly } from "@/components/AdminOnly";
 import { fmtMoney } from "@/lib/time";
+import { createEmployee } from "@/lib/admin-users.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/_authenticated/employees")({
   head: () => ({
@@ -87,11 +99,14 @@ function EmployeesPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">ניהול עובדים והרשאות</h1>
-        <p className="text-sm text-muted-foreground">
-          עובדים נוצרים בהרשמה למערכת. כאן קובעים הרשאות מנהל, תעריף עלות לשעה וסטטוס פעילות.
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">ניהול עובדים והרשאות</h1>
+          <p className="text-sm text-muted-foreground">
+            הוספת משתמשים חדשים, הרשאות מנהל, תעריף עלות לשעה וסטטוס פעילות.
+          </p>
+        </div>
+        <NewUserDialog onCreated={() => qc.invalidateQueries({ queryKey: ["employees"] })} />
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-border bg-card">
@@ -157,5 +172,85 @@ function EmployeesPage() {
         </table>
       </div>
     </div>
+  );
+}
+function NewUserDialog({ onCreated }: { onCreated: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({ full_name: "", email: "", password: "", is_admin: false });
+  const create = useServerFn(createEmployee);
+
+  const mut = useMutation({
+    mutationFn: async () => {
+      if (!form.email.trim() || form.password.length < 8) throw new Error("שדות חסרים");
+      await create({ data: { ...form, email: form.email.trim(), full_name: form.full_name.trim() } });
+    },
+    onSuccess: () => {
+      toast.success("המשתמש נוצר בהצלחה");
+      setForm({ full_name: "", email: "", password: "", is_admin: false });
+      setOpen(false);
+      onCreated();
+    },
+    onError: (e: unknown) =>
+      toast.error(`יצירת המשתמש נכשלה: ${e instanceof Error ? e.message : "שגיאה"}`),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button>
+          <UserPlus className="size-4" />
+          הוספת משתמש
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>הוספת משתמש חדש</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="nu-name">שם מלא</Label>
+            <Input
+              id="nu-name"
+              value={form.full_name}
+              onChange={(e) => setForm({ ...form, full_name: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="nu-email">דוא״ל</Label>
+            <Input
+              id="nu-email"
+              type="email"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="nu-pass">סיסמה ראשונית (8 תווים לפחות)</Label>
+            <Input
+              id="nu-pass"
+              type="text"
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+            />
+          </div>
+          <div className="flex items-center gap-3">
+            <Switch
+              id="nu-admin"
+              checked={form.is_admin}
+              onCheckedChange={(v) => setForm({ ...form, is_admin: v })}
+            />
+            <Label htmlFor="nu-admin">הרשאת מנהל</Label>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>
+            ביטול
+          </Button>
+          <Button onClick={() => mut.mutate()} disabled={mut.isPending}>
+            יצירת משתמש
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

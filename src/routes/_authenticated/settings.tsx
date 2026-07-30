@@ -68,8 +68,38 @@ function SettingsPage() {
       toast.success("ההגדרות נשמרו");
       qc.invalidateQueries({ queryKey: ["org-settings"] });
     },
-    onError: () => toast.error("שמירת ההגדרות נכשלה"),
+    onError: (e: unknown) =>
+      toast.error(`שמירת ההגדרות נכשלה: ${e instanceof Error ? e.message : "שגיאה לא ידועה"}`),
   });
+
+  async function onLogoFile(file: File) {
+    if (!["image/png", "image/jpeg"].includes(file.type)) {
+      toast.error("יש להעלות קובץ PNG או JPEG בלבד");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("גודל הקובץ המרבי הוא 5MB");
+      return;
+    }
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(new Error("read"));
+      reader.readAsDataURL(file);
+    });
+    const img = new Image();
+    img.src = dataUrl;
+    await new Promise((r) => (img.onload = r));
+    const maxW = 480;
+    const scale = Math.min(1, maxW / img.width);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(img.width * scale);
+    canvas.height = Math.round(img.height * scale);
+    canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const out = canvas.toDataURL(file.type === "image/png" ? "image/png" : "image/jpeg", 0.9);
+    setForm((f) => ({ ...f, logo_url: out }));
+    toast.success("הלוגו נטען – יש ללחוץ על שמירת הגדרות");
+  }
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -88,15 +118,32 @@ function SettingsPage() {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="lu">כתובת לוגו (URL)</Label>
+          <Label htmlFor="lf">לוגו המשרד (PNG / JPEG)</Label>
+          <Input
+            id="lf"
+            type="file"
+            accept="image/png,image/jpeg"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void onLogoFile(f);
+            }}
+          />
+          <Label htmlFor="lu" className="pt-2 text-xs text-muted-foreground">
+            או כתובת לוגו חיצונית (URL)
+          </Label>
           <Input
             id="lu"
             placeholder="https://..."
-            value={form.logo_url}
+            value={form.logo_url.startsWith("data:") ? "" : form.logo_url}
             onChange={(e) => setForm({ ...form, logo_url: e.target.value })}
           />
           {form.logo_url && (
-            <img src={form.logo_url} alt="תצוגה מקדימה של לוגו המשרד" className="h-12 w-auto" />
+            <div className="flex items-center gap-3">
+              <img src={form.logo_url} alt="תצוגה מקדימה של לוגו המשרד" className="h-12 w-auto" />
+              <Button variant="ghost" size="sm" onClick={() => setForm({ ...form, logo_url: "" })}>
+                הסרת לוגו
+              </Button>
+            </div>
           )}
         </div>
         <div className="space-y-2">

@@ -131,6 +131,33 @@ function TimesheetPage() {
 
   const todayEntry = entryByDate.get(todayIso());
 
+  const [manual, setManual] = useState({ date: todayIso(), in: "", out: "", brk: "0" });
+  const manualSave = useMutation({
+    mutationFn: async () => {
+      if (!manual.date || (!manual.in && !manual.out)) throw new Error("missing");
+      const existing = entryByDate.get(manual.date);
+      const payload = {
+        clock_in: manual.in || null,
+        clock_out: manual.out || null,
+        break_minutes: Number(manual.brk) || 0,
+      };
+      if (existing) {
+        const { error } = await supabase.from("time_entries").update(payload).eq("id", existing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("time_entries")
+          .insert({ user_id: userId, work_date: manual.date, ...payload });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      toast.success("השעות נשמרו");
+      qc.invalidateQueries({ queryKey: ["month"] });
+    },
+    onError: () => toast.error("הזנת השעות נכשלה – יש למלא תאריך ולפחות שעת כניסה או יציאה"),
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -199,6 +226,54 @@ function TimesheetPage() {
             <Button variant="secondary" onClick={() => setEditDate(todayIso())}>
               עריכת היום ופירוק לפרויקטים
             </Button>
+          </div>
+
+          <div className="mt-5 border-t border-border pt-4">
+            <h3 className="mb-3 text-sm font-medium text-muted-foreground">הזנה ידנית של שעות</h3>
+            <div className="grid gap-2 sm:grid-cols-[1.2fr_1fr_1fr_0.8fr_auto]">
+              <div className="space-y-1">
+                <Label htmlFor="m-date" className="text-xs">תאריך</Label>
+                <Input
+                  id="m-date"
+                  type="date"
+                  value={manual.date}
+                  onChange={(e) => setManual({ ...manual, date: e.target.value })}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="m-in" className="text-xs">כניסה</Label>
+                <Input
+                  id="m-in"
+                  type="time"
+                  value={manual.in}
+                  onChange={(e) => setManual({ ...manual, in: e.target.value })}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="m-out" className="text-xs">יציאה</Label>
+                <Input
+                  id="m-out"
+                  type="time"
+                  value={manual.out}
+                  onChange={(e) => setManual({ ...manual, out: e.target.value })}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="m-brk" className="text-xs">הפסקה (דק׳)</Label>
+                <Input
+                  id="m-brk"
+                  type="number"
+                  min="0"
+                  value={manual.brk}
+                  onChange={(e) => setManual({ ...manual, brk: e.target.value })}
+                />
+              </div>
+              <div className="flex items-end">
+                <Button variant="secondary" onClick={() => manualSave.mutate()} disabled={manualSave.isPending}>
+                  שמירה ידנית
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
         <StatCard title="סה״כ שעות נוכחות" value={fmtHours(totals.attendance)} />

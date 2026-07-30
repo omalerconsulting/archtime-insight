@@ -13,6 +13,21 @@ export function absenceLabel(value: string | null | undefined) {
   return ABSENCE_TYPES.find((a) => a.value === value)?.label ?? value;
 }
 
+export const PROJECT_STATUSES = [
+  { value: "active", label: "פעיל" },
+  { value: "quote", label: "בהצעת מחיר" },
+  { value: "closed", label: "פרויקט הסתיים" },
+] as const;
+
+export function projectStatusLabel(value: string) {
+  return PROJECT_STATUSES.find((s) => s.value === value)?.label ?? value;
+}
+
+export function monthLabel(dateIso: string) {
+  const [y, m] = dateIso.split("-");
+  return `${MONTH_NAMES[Number(m) - 1]} ${y}`;
+}
+
 export const MONTH_NAMES = [
   "ינואר",
   "פברואר",
