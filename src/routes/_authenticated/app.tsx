@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, LogIn, LogOut, Plus, Save, Trash2 } from "lucide-react";
+import { AlertTriangle, Coffee, LogIn, LogOut, Plus, Play, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -14,6 +14,7 @@ import {
   iso,
   monthRange,
   MONTH_NAMES,
+  normalizeTime,
   nowTime,
   todayIso,
   weekdayOf,
@@ -50,6 +51,43 @@ export const Route = createFileRoute("/_authenticated/app")({
 });
 
 type DayRow = { project_id: string; hours: string; description: string; id?: string };
+
+/** 24h text field, always normalized to HH:MM:SS. */
+function TimeField({
+  id,
+  value,
+  onChange,
+  ...rest
+}: {
+  id?: string;
+  value: string;
+  onChange: (v: string) => void;
+  "aria-label"?: string;
+}) {
+  return (
+    <Input
+      id={id}
+      inputMode="numeric"
+      dir="ltr"
+      className="text-center tabular-nums"
+      placeholder="HH:MM:SS"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      onBlur={(e) => onChange(normalizeTime(e.target.value))}
+      {...rest}
+    />
+  );
+}
+
+const breakKey = (userId: string, date: string) => `break-start:${userId}:${date}`;
+
+function minutesBetween(from: string, to: string) {
+  const [h1, m1, s1 = 0] = from.split(":").map(Number);
+  const [h2, m2, s2 = 0] = to.split(":").map(Number);
+  let sec = h2 * 3600 + m2 * 60 + s2 - (h1 * 3600 + m1 * 60 + s1);
+  if (sec < 0) sec += 86400;
+  return Math.max(0, Math.round(sec / 60));
+}
 
 function TimesheetPage() {
   const { user } = useAuth();
@@ -105,13 +143,24 @@ function TimesheetPage() {
   }, [days, entryByDate, hoursByDate]);
 
   const clockMutation = useMutation({
-    mutationFn: async (kind: "in" | "out") => {
+    mutationFn: async (kind: "in" | "out" | "break-start" | "break-end") => {
       const date = todayIso();
       const existing = entryByDate.get(date);
-      const payload =
-        kind === "in"
-          ? { clock_in: nowTime() }
-          : { clock_out: nowTime() };
+      let payload: Record<string, unknown> = {};
+      if (kind === "in") payload = { clock_in: nowTime() };
+      else if (kind === "out") payload = { clock_out: nowTime() };
+      else if (kind === "break-start") {
+        localStorage.setItem(breakKey(userId, date), nowTime());
+        setBreakStart(nowTime());
+        return;
+      } else {
+        const start = localStorage.getItem(breakKey(userId, date));
+        if (!start) throw new Error("no-break");
+        const added = minutesBetween(start, nowTime());
+        localStorage.removeItem(breakKey(userId, date));
+        setBreakStart(null);
+        payload = { break_minutes: (existing?.break_minutes ?? 0) + added };
+      }
       if (existing) {
         const { error } = await supabase.from("time_entries").update(payload).eq("id", existing.id);
         if (error) throw error;
@@ -123,13 +172,24 @@ function TimesheetPage() {
       }
     },
     onSuccess: (_d, kind) => {
-      toast.success(kind === "in" ? "נרשמה כניסה" : "נרשמה יציאה");
+      toast.success(
+        kind === "in"
+          ? "נרשמה כניסה"
+          : kind === "out"
+            ? "נרשמה יציאה"
+            : kind === "break-start"
+              ? "יצאת להפסקה"
+              : "חזרת מהפסקה – ההפסקה נרשמה",
+      );
       qc.invalidateQueries({ queryKey: ["month"] });
     },
     onError: () => toast.error("שמירת הדיווח נכשלה"),
   });
 
   const todayEntry = entryByDate.get(todayIso());
+  const [breakStart, setBreakStart] = useState<string | null>(() =>
+    typeof window === "undefined" ? null : localStorage.getItem(breakKey(user?.id ?? "", todayIso())),
+  );
 
   const [manual, setManual] = useState({ date: todayIso(), in: "", out: "", brk: "0" });
   const manualSave = useMutation({
