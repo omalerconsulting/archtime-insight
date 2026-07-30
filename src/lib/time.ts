@@ -87,12 +87,6 @@ export function yearOptions(backYears = 10, forwardYears = 5) {
   return years;
 }
 
-function unusedMonthRange(year: number, month: number) {
-  const start = new Date(Date.UTC(year, month, 1));
-  const end = new Date(Date.UTC(year, month + 1, 0));
-  return { start: iso(start), end: iso(end), days: end.getUTCDate() };
-}
-
 export function iso(d: Date) {
   return d.toISOString().slice(0, 10);
 }
