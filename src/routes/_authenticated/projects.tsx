@@ -405,7 +405,13 @@ function MilestonesPanel({
   });
 
   const update = useMutation({
-    mutationFn: async ({ id, patch }: { id: string; patch: Record<string, unknown> }) => {
+    mutationFn: async ({
+      id,
+      patch,
+    }: {
+      id: string;
+      patch: { status: string; paid_date: string | null };
+    }) => {
       const { error } = await supabase.from("project_milestones").update(patch).eq("id", id);
       if (error) throw error;
     },
