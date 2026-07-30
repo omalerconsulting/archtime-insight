@@ -167,7 +167,7 @@ function FinancePage() {
 
         <section className="overflow-x-auto rounded-xl border border-border bg-card">
           <table className="w-full text-sm">
-            <caption className="p-3 text-start font-semibold">תנאי תשלום פתוחות</caption>
+            <caption className="p-3 text-start font-semibold">תנאי תשלום פתוחים</caption>
             <thead className="bg-muted/60">
               <tr>
                 <th scope="col" className="p-3 text-start">קוד</th>
@@ -200,7 +200,7 @@ function FinancePage() {
               {open.length === 0 && (
                 <tr>
                   <td colSpan={7} className="p-6 text-center text-muted-foreground">
-                    אין תנאי תשלום פתוחות.
+                    אין תנאי תשלום פתוחים.
                   </td>
                 </tr>
               )}
