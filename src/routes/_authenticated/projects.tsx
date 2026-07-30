@@ -77,6 +77,7 @@ function ProjectsPage() {
   const [checked, setChecked] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [pendingDelete, setPendingDelete] = useState<string[] | null>(null);
 
   const projectsQ = useQuery({
     queryKey: ["projects-full"],
@@ -168,9 +169,7 @@ function ProjectsPage() {
             <Button
               variant="destructive"
               size="sm"
-              onClick={() => {
-                if (confirm(`למחוק ${checked.length} פרויקטים מסומנים?`)) del.mutate(checked);
-              }}
+              onClick={() => setPendingDelete(checked)}
             >
               <Trash2 className="size-4" />
               מחיקת המסומנים
@@ -267,9 +266,7 @@ function ProjectsPage() {
                         size="icon"
                         variant="ghost"
                         aria-label={`מחיקת ${p.name}`}
-                        onClick={() => {
-                          if (confirm(`למחוק את הפרויקט ${p.name}?`)) del.mutate([p.id]);
-                        }}
+                        onClick={() => setPendingDelete([p.id])}
                       >
                         <Trash2 className="size-4" />
                       </Button>
