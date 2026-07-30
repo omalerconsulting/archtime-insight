@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { UserPlus, KeyRound } from "lucide-react";
+import { UserPlus, KeyRound, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminOnly } from "@/components/AdminOnly";
 import { fmtMoney } from "@/lib/time";
@@ -83,6 +83,21 @@ function EmployeesPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["employees"] }),
   });
 
+  const approve = useMutation({
+    mutationFn: async (userId: string) => {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ is_approved: true })
+        .eq("id", userId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("המשתמש אושר ויוכל להיכנס למערכת");
+      qc.invalidateQueries({ queryKey: ["employees"] });
+    },
+    onError: () => toast.error("אישור המשתמש נכשל"),
+  });
+
   const setCost = useMutation({
     mutationFn: async ({ userId, value }: { userId: string; value: number | null }) => {
       const { error } = await supabase.from("profiles").update({ cost_rate: value }).eq("id", userId);
@@ -116,6 +131,8 @@ function EmployeesPage() {
             <tr>
               <th scope="col" className="p-3 text-start">שם</th>
               <th scope="col" className="p-3 text-start">דוא״ל</th>
+              <th scope="col" className="p-3 text-start">פרטים מזהים</th>
+              <th scope="col" className="p-3 text-start">אישור כניסה</th>
               <th scope="col" className="p-3 text-start">תעריף עלות למשרד (₪/שעה)</th>
               <th scope="col" className="p-3 text-start">שכר שעתי שהוזן ע״י העובד</th>
               <th scope="col" className="p-3 text-start">הרשאת מנהל</th>
@@ -128,6 +145,25 @@ function EmployeesPage() {
               <tr key={p.id} className="border-t border-border">
                 <td className="p-3 font-medium">{p.full_name || "—"}</td>
                 <td className="p-3">{p.email}</td>
+                <td className="p-3 text-xs text-muted-foreground">
+                  <div>טלפון: {p.phone || "—"}</div>
+                  <div>ת״ז: {p.national_id || "—"}</div>
+                  <div>לידה: {p.birth_date || "—"}</div>
+                </td>
+                <td className="p-3">
+                  {p.is_approved ? (
+                    <span className="text-xs font-medium text-emerald-600">מאושר</span>
+                  ) : (
+                    <Button
+                      size="sm"
+                      onClick={() => approve.mutate(p.id)}
+                      aria-label={`אישור כניסה עבור ${p.full_name || p.email}`}
+                    >
+                      <Check className="size-4" />
+                      אישור
+                    </Button>
+                  )}
+                </td>
                 <td className="p-3">
                   <div className="flex items-center gap-2">
                     <Input

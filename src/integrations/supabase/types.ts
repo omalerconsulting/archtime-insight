@@ -46,6 +46,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          birth_date: string | null
           cost_rate: number | null
           created_at: string
           email: string
@@ -53,11 +54,14 @@ export type Database = {
           hourly_rate: number | null
           id: string
           is_active: boolean
+          is_approved: boolean
           must_change_password: boolean
+          national_id: string | null
           phone: string | null
           updated_at: string
         }
         Insert: {
+          birth_date?: string | null
           cost_rate?: number | null
           created_at?: string
           email?: string
@@ -65,11 +69,14 @@ export type Database = {
           hourly_rate?: number | null
           id: string
           is_active?: boolean
+          is_approved?: boolean
           must_change_password?: boolean
+          national_id?: string | null
           phone?: string | null
           updated_at?: string
         }
         Update: {
+          birth_date?: string | null
           cost_rate?: number | null
           created_at?: string
           email?: string
@@ -77,7 +84,9 @@ export type Database = {
           hourly_rate?: number | null
           id?: string
           is_active?: boolean
+          is_approved?: boolean
           must_change_password?: boolean
+          national_id?: string | null
           phone?: string | null
           updated_at?: string
         }

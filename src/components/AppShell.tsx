@@ -21,6 +21,7 @@ import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { MonthEndNotice } from "@/components/MonthEndNotice";
 import { ForcePasswordChange } from "@/components/ForcePasswordChange";
+import { PendingApproval } from "@/components/PendingApproval";
 import officeLogo from "@/assets/office-logo.png";
 
 type NavItem = { to: string; label: string; icon: typeof Building2; adminOnly?: boolean };
@@ -83,6 +84,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const items = NAV.filter((item) => !item.adminOnly || isAdmin);
 
+  if (profile && profile.is_approved === false) return <PendingApproval />;
   if (profile?.must_change_password) return <ForcePasswordChange />;
 
   return (

@@ -2,11 +2,15 @@ import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Building2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { resetPasswordWithIdentity } from "@/lib/account.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+
+type Mode = "signin" | "signup" | "forgot";
 
 export const Route = createFileRoute("/auth")({
   validateSearch: (s: Record<string, unknown>): { next?: string } => {
@@ -36,9 +40,12 @@ function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
-  const [mode, setMode] = useState<"signin" | "first-admin">("signin");
+  const [phone, setPhone] = useState("");
+  const [nationalId, setNationalId] = useState("");
+  const [birthDate, setBirthDate] = useState("");
+  const [mode, setMode] = useState<Mode>("signin");
   const [busy, setBusy] = useState(false);
-  const [hasUsers, setHasUsers] = useState<boolean | null>(null);
+  const resetPw = useServerFn(resetPasswordWithIdentity);
 
   useEffect(() => {
     if (!authLoading && session) {
@@ -46,17 +53,6 @@ function AuthPage() {
       else navigate({ to: "/app", replace: true });
     }
   }, [authLoading, session, navigate, next]);
-
-  useEffect(() => {
-    supabase
-      .from("user_roles")
-      .select("id", { count: "exact", head: true })
-      .then(({ count, error }) => {
-        // Unauthenticated readers cannot see rows; a null/0 count is treated as "unknown".
-        if (error) setHasUsers(true);
-        else setHasUsers((count ?? 0) > 0);
-      });
-  }, []);
 
   async function signIn(e: React.FormEvent) {
     e.preventDefault();
@@ -71,15 +67,20 @@ function AuthPage() {
     else navigate({ to: "/app", replace: true });
   }
 
-  async function createFirstAdmin(e: React.FormEvent) {
+  async function signUp(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     const { error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
       options: {
-        data: { full_name: fullName.trim() },
-        emailRedirectTo: next ? `${window.location.origin}${next}` : window.location.origin,
+        data: {
+          full_name: fullName.trim(),
+          phone: phone.trim(),
+          national_id: nationalId.trim(),
+          birth_date: birthDate,
+        },
+        emailRedirectTo: window.location.origin,
       },
     });
     setBusy(false);
@@ -87,10 +88,78 @@ function AuthPage() {
       toast.error("יצירת המשתמש נכשלה", { description: error.message });
       return;
     }
-    toast.success("המשתמש הראשון נוצר והוגדר כמנהל");
-    if (next) window.location.replace(next);
-    else navigate({ to: "/app", replace: true });
+    await supabase.auth.signOut();
+    toast.success("המשתמש נוצר ונשלח לאישור מנהל", {
+      description: "לאחר אישור המנהל תוכל להיכנס עם המייל והסיסמה שהגדרת.",
+    });
+    setMode("signin");
+    setPassword("");
   }
+
+  async function forgot(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      await resetPw({
+        data: {
+          email: email.trim(),
+          national_id: nationalId.trim(),
+          birth_date: birthDate,
+          phone: phone.trim(),
+          password,
+        },
+      });
+      toast.success("הסיסמה עודכנה", { description: "אפשר להיכנס עם הסיסמה החדשה." });
+      setMode("signin");
+      setPassword("");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      toast.error("איפוס הסיסמה נכשל", {
+        description: msg.includes("pending")
+          ? "החשבון עדיין ממתין לאישור מנהל."
+          : "הפרטים המזהים שהוזנו אינם תואמים לפרטים שנשמרו במערכת.",
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const identityFields = (
+    <>
+      <div className="space-y-2">
+        <Label htmlFor="phone">מספר טלפון</Label>
+        <Input
+          id="phone"
+          type="tel"
+          required
+          inputMode="tel"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="nid">תעודת זהות</Label>
+        <Input
+          id="nid"
+          required
+          inputMode="numeric"
+          maxLength={20}
+          value={nationalId}
+          onChange={(e) => setNationalId(e.target.value)}
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="bdate">תאריך לידה</Label>
+        <Input
+          id="bdate"
+          type="date"
+          required
+          value={birthDate}
+          onChange={(e) => setBirthDate(e.target.value)}
+        />
+      </div>
+    </>
+  );
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
@@ -99,12 +168,12 @@ function AuthPage() {
           <Building2 className="mx-auto mb-3 size-8 text-accent" aria-hidden />
           <h1 className="text-2xl font-bold">מערכת שעות ופרויקטים</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            הכניסה מותרת למשתמשים שנפתחו על ידי מנהל המשרד
+            הכניסה מותרת למשתמשים שאושרו על ידי מנהל המשרד
           </p>
         </div>
 
         <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-          {mode === "signin" ? (
+          {mode === "signin" && (
             <form onSubmit={signIn} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">כתובת מייל</Label>
@@ -133,10 +202,13 @@ function AuthPage() {
                 כניסה
               </Button>
             </form>
-          ) : (
-            <form onSubmit={createFirstAdmin} className="space-y-4">
+          )}
+
+          {mode === "signup" && (
+            <form onSubmit={signUp} className="space-y-4">
               <p className="rounded-lg bg-muted p-3 text-sm text-muted-foreground">
-                טרם הוגדרו משתמשים במערכת. המשתמש הראשון שייווצר יקבל הרשאות מנהל.
+                לאחר ההרשמה המשתמש נפתח אצל מנהל המשרד וממתין לאישורו. רק לאחר אישור המנהל אפשר
+                להיכנס עם המייל והסיסמה שהוגדרו.
               </p>
               <div className="space-y-2">
                 <Label htmlFor="name">שם מלא</Label>
@@ -157,33 +229,88 @@ function AuthPage() {
                   onChange={(e) => setEmail(e.target.value)}
                 />
               </div>
+              {identityFields}
               <div className="space-y-2">
-                <Label htmlFor="password2">סיסמה (6 תווים לפחות)</Label>
+                <Label htmlFor="password2">סיסמה (8 תווים לפחות)</Label>
                 <Input
                   id="password2"
                   type="password"
                   required
-                  minLength={6}
+                  minLength={8}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
               </div>
               <Button type="submit" className="w-full" disabled={busy}>
                 {busy && <Loader2 className="size-4 animate-spin" />}
-                יצירת מנהל ראשון
+                יצירת משתמש
               </Button>
             </form>
           )}
 
-          {hasUsers === false && (
-            <button
-              type="button"
-              className="mt-4 w-full text-sm text-accent underline"
-              onClick={() => setMode(mode === "signin" ? "first-admin" : "signin")}
-            >
-              {mode === "signin" ? "הגדרת מנהל ראשון למערכת" : "חזרה למסך הכניסה"}
-            </button>
+          {mode === "forgot" && (
+            <form onSubmit={forgot} className="space-y-4">
+              <p className="rounded-lg bg-muted p-3 text-sm text-muted-foreground">
+                לאיפוס הסיסמה יש להזין את הפרטים המזהים שהוזנו בעת פתיחת המשתמש.
+              </p>
+              <div className="space-y-2">
+                <Label htmlFor="email3">כתובת מייל</Label>
+                <Input
+                  id="email3"
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+              {identityFields}
+              <div className="space-y-2">
+                <Label htmlFor="password3">סיסמה חדשה (8 תווים לפחות)</Label>
+                <Input
+                  id="password3"
+                  type="password"
+                  required
+                  minLength={8}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </div>
+              <Button type="submit" className="w-full" disabled={busy}>
+                {busy && <Loader2 className="size-4 animate-spin" />}
+                איפוס סיסמה
+              </Button>
+            </form>
           )}
+
+          <div className="mt-4 space-y-2 text-center">
+            {mode !== "signup" && (
+              <button
+                type="button"
+                className="block w-full text-sm text-accent underline"
+                onClick={() => setMode("signup")}
+              >
+                משתמש חדש
+              </button>
+            )}
+            {mode !== "forgot" && (
+              <button
+                type="button"
+                className="block w-full text-sm text-muted-foreground underline"
+                onClick={() => setMode("forgot")}
+              >
+                שכחתי סיסמה
+              </button>
+            )}
+            {mode !== "signin" && (
+              <button
+                type="button"
+                className="block w-full text-sm text-muted-foreground underline"
+                onClick={() => setMode("signin")}
+              >
+                חזרה למסך הכניסה
+              </button>
+            )}
+          </div>
         </div>
 
         <p className="mt-6 text-center text-sm text-muted-foreground">
