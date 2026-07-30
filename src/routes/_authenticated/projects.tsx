@@ -210,8 +210,14 @@ function ProjectsPage() {
   );
 }
 
+type MilestoneDraft = {
+  title: string;
+  amount_type: string;
+  amount_value: string;
+  due_date: string;
+};
+
 type ProjectRow = {
-  id: string;
   id: string;
   code: string;
   name: string;
