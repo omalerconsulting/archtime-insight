@@ -1,0 +1,215 @@
+{
+  "version": 1,
+  "sdk_version": "0.25.0",
+  "path": "/mcp",
+  "auth": {
+    "type": "oauth",
+    "issuer": "https://lhadrbjzdergyglppqko.supabase.co/auth/v1",
+    "accepted_audiences": [
+      "authenticated"
+    ]
+  },
+  "mcp": {
+    "server": {
+      "name": "project-compass",
+      "version": "0.1.0",
+      "title": "Project Compass"
+    },
+    "tools": [
+      {
+        "name": "list_projects",
+        "title": "List projects",
+        "description": "List office projects visible to the signed-in user, with code, name, client and status. Financial fields are only returned for managers.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "active",
+                "quote",
+                "done",
+                "all"
+              ],
+              "description": "Filter by project status."
+            },
+            "search": {
+              "type": "string",
+              "description": "Free text match on project name or code."
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_project_milestones",
+        "title": "List payment milestones",
+        "description": "List payment milestones (stage, amount, due date, payment status) for a project. Managers only — employees get no rows.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "project_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Project id (from list_projects)."
+            }
+          },
+          "required": [
+            "project_id"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "log_project_hours",
+        "title": "Log project hours",
+        "description": "Record hours the signed-in user worked on a project on a given date.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "project_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Project id (from list_projects)."
+            },
+            "work_date": {
+              "type": "string",
+              "description": "Work date in YYYY-MM-DD format."
+            },
+            "hours": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "Number of hours worked."
+            },
+            "description": {
+              "type": "string",
+              "description": "Short note about the work done."
+            }
+          },
+          "required": [
+            "project_id",
+            "work_date",
+            "hours"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_my_project_hours",
+        "title": "List my project hours",
+        "description": "List the signed-in user's project hour entries within a date range.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "from": {
+              "type": "string",
+              "description": "Start date YYYY-MM-DD (inclusive)."
+            },
+            "to": {
+              "type": "string",
+              "description": "End date YYYY-MM-DD (inclusive)."
+            },
+            "project_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Limit to one project."
+            }
+          },
+          "required": [
+            "from",
+            "to"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_my_attendance",
+        "title": "List my attendance",
+        "description": "List the signed-in user's attendance days (clock in/out, breaks, absences) within a date range.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "from": {
+              "type": "string",
+              "description": "Start date YYYY-MM-DD (inclusive)."
+            },
+            "to": {
+              "type": "string",
+              "description": "End date YYYY-MM-DD (inclusive)."
+            }
+          },
+          "required": [
+            "from",
+            "to"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "project_hours_summary",
+        "title": "Project hours summary",
+        "description": "Total hours per project in a date range, aggregated across every entry the signed-in user is allowed to see (managers see the whole office).",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "from": {
+              "type": "string",
+              "description": "Start date YYYY-MM-DD (inclusive)."
+            },
+            "to": {
+              "type": "string",
+              "description": "End date YYYY-MM-DD (inclusive)."
+            }
+          },
+          "required": [
+            "from",
+            "to"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}
