@@ -294,6 +294,31 @@ function ProjectsPage() {
           onChanged={() => qc.invalidateQueries({ queryKey: ["projects-full"] })}
         />
       ))}
+
+      <AlertDialog
+        open={pendingDelete !== null}
+        onOpenChange={(o) => !o && setPendingDelete(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>האם אתה בטוח?</AlertDialogTitle>
+            <AlertDialogDescription>
+              לאחר המחיקה, לא ניתן לשחזר את המידע
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setPendingDelete(null)}>לא</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (pendingDelete) del.mutate(pendingDelete);
+                setPendingDelete(null);
+              }}
+            >
+              כן
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
