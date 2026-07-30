@@ -146,7 +146,11 @@ function TimesheetPage() {
     mutationFn: async (kind: "in" | "out" | "break-start" | "break-end") => {
       const date = todayIso();
       const existing = entryByDate.get(date);
-      let payload: Record<string, unknown> = {};
+      let payload: {
+        clock_in?: string;
+        clock_out?: string;
+        break_minutes?: number;
+      } = {};
       if (kind === "in") payload = { clock_in: nowTime() };
       else if (kind === "out") payload = { clock_out: nowTime() };
       else if (kind === "break-start") {
