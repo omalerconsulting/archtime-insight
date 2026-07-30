@@ -25,6 +25,7 @@ import {
   weekdayOf,
 } from "@/lib/time";
 import { Button } from "@/components/ui/button";
+import { ProjectPicker } from "@/components/ProjectPicker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -694,25 +695,15 @@ function DayEditor({
                 )}
                 {rows.map((row, idx) => (
                   <div key={idx} className="grid gap-2 sm:grid-cols-[2fr_1fr_2fr_auto]">
-                    <Select
+                    <ProjectPicker
+                      projects={projects}
                       value={row.project_id}
-                      onValueChange={(v) => {
+                      onChange={(v) => {
                         const next = [...rows];
                         next[idx] = { ...row, project_id: v };
                         setRows(next);
                       }}
-                    >
-                      <SelectTrigger aria-label="בחירת פרויקט">
-                        <SelectValue placeholder="בחר פרויקט" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {projects.map((p) => (
-                          <SelectItem key={p.id} value={p.id}>
-                            {p.code} · {p.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    />
                     <Input
                       inputMode="numeric"
                       dir="ltr"
