@@ -502,7 +502,7 @@ function TimesheetPage() {
                   </td>
                   <td className="p-3">
                     <Button size="sm" variant="ghost" onClick={() => setEditDate(d)}>
-                      עריכה
+                      {monthLocked ? "צפייה" : "עריכה"}
                     </Button>
                     {e?.manually_edited && (
                       <span className="ms-1 text-xs text-destructive">עודכן ידנית</span>
@@ -520,6 +520,7 @@ function TimesheetPage() {
           date={editDate}
           userId={userId}
           projects={projectsQ.data ?? []}
+          locked={isDateLocked(editDate, isAdmin)}
           onClose={() => setEditDate(null)}
         />
       )}
