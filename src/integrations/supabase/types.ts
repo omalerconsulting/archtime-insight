@@ -224,7 +224,12 @@ export type Database = {
           clock_out: string | null
           created_at: string
           id: string
+          manual_edited_at: string | null
+          manually_edited: boolean
           note: string | null
+          original_break_minutes: number | null
+          original_clock_in: string | null
+          original_clock_out: string | null
           updated_at: string
           user_id: string
           work_date: string
@@ -236,7 +241,12 @@ export type Database = {
           clock_out?: string | null
           created_at?: string
           id?: string
+          manual_edited_at?: string | null
+          manually_edited?: boolean
           note?: string | null
+          original_break_minutes?: number | null
+          original_clock_in?: string | null
+          original_clock_out?: string | null
           updated_at?: string
           user_id: string
           work_date: string
@@ -248,7 +258,12 @@ export type Database = {
           clock_out?: string | null
           created_at?: string
           id?: string
+          manual_edited_at?: string | null
+          manually_edited?: boolean
           note?: string | null
+          original_break_minutes?: number | null
+          original_clock_in?: string | null
+          original_clock_out?: string | null
           updated_at?: string
           user_id?: string
           work_date?: string
