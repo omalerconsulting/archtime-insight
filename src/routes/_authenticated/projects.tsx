@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -250,6 +250,7 @@ function ProjectsPage() {
                     <div className="flex gap-1">
                       <ProjectDialog
                         project={p}
+                        projectMilestones={ms}
                         onSaved={() => qc.invalidateQueries({ queryKey: ["projects-full"] })}
                       />
                       <Button
@@ -291,10 +292,12 @@ function ProjectsPage() {
 }
 
 type MilestoneDraft = {
+  id?: string;
   title: string;
   amount_type: string;
   amount_value: string;
   due_date: string;
+  status?: string;
 };
 
 type ProjectRow = {
@@ -309,7 +312,15 @@ type ProjectRow = {
   notes: string | null;
 };
 
-function ProjectDialog({ project, onSaved }: { project?: ProjectRow; onSaved: () => void }) {
+function ProjectDialog({
+  project,
+  projectMilestones = [],
+  onSaved,
+}: {
+  project?: ProjectRow;
+  projectMilestones?: Milestone[];
+  onSaved: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
     code: project?.code ?? "",
@@ -322,6 +333,25 @@ function ProjectDialog({ project, onSaved }: { project?: ProjectRow; onSaved: ()
     notes: project?.notes ?? "",
   });
   const [stations, setStations] = useState<MilestoneDraft[]>([]);
+
+  // Load the project's existing payment terms into the editor each time it opens.
+  useEffect(() => {
+    if (!open) return;
+    setStations(
+      [...projectMilestones]
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map((m) => ({
+          id: m.id,
+          title: m.title,
+          amount_type: m.amount_type,
+          amount_value: String(m.amount_value ?? ""),
+          due_date: m.due_date ?? "",
+          status: m.status,
+        })),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   const fee = Number(form.fee_total) || 0;
   const stationsTotal = stations.reduce(
     (s, m) => s + milestoneAmount(m.amount_type, Number(m.amount_value) || 0, fee),
@@ -369,18 +399,35 @@ function ProjectDialog({ project, onSaved }: { project?: ProjectRow; onSaved: ()
 
   async function saveStations(projectId: string) {
     const valid = stations.filter((s) => s.title.trim());
-    if (valid.length === 0) return;
-    const { error } = await supabase.from("project_milestones").insert(
-      valid.map((s, i) => ({
-        project_id: projectId,
+    const keptIds = valid.map((s) => s.id).filter(Boolean) as string[];
+    const removed = projectMilestones
+      .filter((m) => !keptIds.includes(m.id))
+      .map((m) => m.id);
+
+    if (removed.length > 0) {
+      const { error } = await supabase.from("project_milestones").delete().in("id", removed);
+      if (error) throw error;
+    }
+
+    for (let i = 0; i < valid.length; i++) {
+      const s = valid[i];
+      const row = {
         title: s.title.trim(),
         amount_type: s.amount_type,
         amount_value: Number(s.amount_value) || 0,
         due_date: s.due_date || null,
         sort_order: i,
-      })),
-    );
-    if (error) throw error;
+      };
+      if (s.id) {
+        const { error } = await supabase.from("project_milestones").update(row).eq("id", s.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("project_milestones")
+          .insert({ ...row, project_id: projectId });
+        if (error) throw error;
+      }
+    }
   }
 
   return (
@@ -495,7 +542,7 @@ function ProjectDialog({ project, onSaved }: { project?: ProjectRow; onSaved: ()
             {stations.length === 0 && (
               <p className="text-xs text-muted-foreground">
                 {project
-                  ? "תחנות קיימות נערכות בטבלה שמתחת לרשימת הפרויקטים. כאן ניתן להוסיף תחנות חדשות."
+                  ? "לפרויקט זה עדיין לא הוגדרו תנאי תשלום. ניתן להוסיף תחנות באחוזים או בסכום."
                   : "ניתן להגדיר תחנות באחוזים או בסכום, עם תאריך צפי לתשלום. הסכום הכולל חייב להשלים ל‑100%."}
               </p>
             )}
@@ -565,6 +612,7 @@ function ProjectDialog({ project, onSaved }: { project?: ProjectRow; onSaved: ()
                 </Button>
                 <p className="text-xs text-muted-foreground sm:col-span-5">
                   שווה ערך: {fmtMoney(rowAmount)} · {rowPercent.toFixed(1)}% משכר הטרחה
+                  {s.status === "paid" && " · שולם"}
                 </p>
               </div>
               );
