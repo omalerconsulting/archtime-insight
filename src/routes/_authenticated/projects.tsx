@@ -317,7 +317,7 @@ function ProjectDialog({ project, onSaved }: { project?: ProjectRow; onSaved: ()
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>{project ? "עריכת פרויקט" : "פרויקט חדש"}</DialogTitle>
         </DialogHeader>
@@ -419,8 +419,11 @@ function ProjectDialog({ project, onSaved }: { project?: ProjectRow; onSaved: ()
                   : "ניתן להגדיר תחנות באחוזים או בסכום, עם תאריך צפי לתשלום. הסכום הכולל חייב להשלים ל‑100%."}
               </p>
             )}
-            {stations.map((s, idx) => (
-              <div key={idx} className="grid gap-2 sm:grid-cols-[2fr_1fr_1fr_1.2fr_auto]">
+            {stations.map((s, idx) => {
+              const rowAmount = milestoneAmount(s.amount_type, Number(s.amount_value) || 0, fee);
+              const rowPercent = fee > 0 ? (rowAmount / fee) * 100 : 0;
+              return (
+              <div key={idx} className="grid gap-2 sm:grid-cols-[minmax(0,2fr)_7rem_minmax(9rem,1fr)_minmax(0,1.2fr)_auto] sm:items-center">
                 <Input
                   aria-label="שלב בפרויקט"
                   placeholder="שלב (למשל: חתימת חוזה)"
@@ -450,12 +453,15 @@ function ProjectDialog({ project, onSaved }: { project?: ProjectRow; onSaved: ()
                 <Input
                   type="number"
                   min="0"
+                  step="any"
+                  inputMode="decimal"
+                  className="w-full min-w-[9rem] text-start font-mono tabular-nums"
                   aria-label="ערך התחנה"
-                  placeholder={s.amount_type === "percent" ? "30" : "₪"}
+                  placeholder={s.amount_type === "percent" ? "30" : "100000"}
                   value={s.amount_value}
                   onChange={(e) => {
                     const n = [...stations];
-                    n[idx] = { ...s, amount_value: e.target.value };
+                    n[idx] = { ...s, amount_value: e.target.value.slice(0, 9) };
                     setStations(n);
                   }}
                 />
@@ -477,13 +483,22 @@ function ProjectDialog({ project, onSaved }: { project?: ProjectRow; onSaved: ()
                 >
                   <Trash2 className="size-4" />
                 </Button>
+                <p className="text-xs text-muted-foreground sm:col-span-5">
+                  שווה ערך: {fmtMoney(rowAmount)} · {rowPercent.toFixed(1)}% משכר הטרחה
+                </p>
               </div>
-            ))}
+              );
+            })}
             {stations.length > 0 && (
               <p className={`text-sm ${stationsValid ? "text-muted-foreground" : "text-destructive font-medium"}`}>
-                סך התחנות: {fmtMoney(stationsTotal)} מתוך שכר טרחה {fmtMoney(fee)}
+                סך כל התחנות יחד: {fmtMoney(stationsTotal)} מתוך שכר טרחה {fmtMoney(fee)}
                 {fee > 0 && ` · ${((stationsTotal / fee) * 100).toFixed(1)}%`}
-                {!stationsValid && " – חובה להשלים בדיוק ל‑100% משכר הטרחה"}
+                {!stationsValid &&
+                  ` – ${
+                    stationsTotal > fee
+                      ? `חריגה של ${fmtMoney(stationsTotal - fee)}`
+                      : `נותר להשלים ${fmtMoney(fee - stationsTotal)}`
+                  }. סכום כל התחנות יחד חייב להיות 100% משכר הטרחה (כל תחנה בנפרד יכולה להיות כל אחוז).`}
               </p>
             )}
           </div>
@@ -642,7 +657,7 @@ function MilestonesPanel({
         </tbody>
       </table>
 
-      <div className="mt-4 grid gap-2 sm:grid-cols-[2fr_1fr_1fr_1fr_auto]">
+      <div className="mt-4 grid gap-2 sm:grid-cols-[minmax(0,2fr)_7rem_minmax(9rem,1fr)_minmax(0,1fr)_auto]">
         <Input
           aria-label="שם השלב"
           placeholder="לדוגמה: חתימה על חוזה"
@@ -660,10 +675,13 @@ function MilestonesPanel({
         </Select>
         <Input
           type="number"
+          step="any"
+          inputMode="decimal"
+          className="min-w-[9rem] font-mono tabular-nums"
           aria-label="ערך"
-          placeholder={draft.amount_type === "percent" ? "30" : "₪"}
+          placeholder={draft.amount_type === "percent" ? "30" : "100000"}
           value={draft.amount_value}
-          onChange={(e) => setDraft({ ...draft, amount_value: e.target.value })}
+          onChange={(e) => setDraft({ ...draft, amount_value: e.target.value.slice(0, 9) })}
         />
         <Input
           type="date"
