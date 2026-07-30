@@ -5,6 +5,7 @@ import { Printer } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { fetchMonthEntries, fetchProjectDirectory, trimTime } from "@/lib/queries";
+import { holidayFor } from "@/lib/holidays";
 import {
   absenceLabel,
   computeHours,
@@ -111,7 +112,7 @@ function ReportPage() {
       trimTime(e?.clock_out ?? null),
       e?.break_minutes ?? 0,
     );
-    return { date: d, entry: e, hrs, attendance };
+    return { date: d, entry: e, hrs, attendance, holiday: holidayFor(d) };
   });
 
   const totals = rows.reduce(
