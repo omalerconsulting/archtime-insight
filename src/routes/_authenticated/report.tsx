@@ -45,6 +45,7 @@ function ReportPage() {
   const [target, setTarget] = useState<string>("me");
 
   const range = useMemo(() => monthRange(year, month), [year, month]);
+  const isAll = target === "all" && isAdmin;
   const userId = target === "me" ? (user?.id ?? "") : target;
 
   const staffQ = useQuery({
@@ -64,7 +65,29 @@ function ReportPage() {
   const dataQ = useQuery({
     queryKey: ["month", userId, range.start],
     queryFn: () => fetchMonthEntries(userId, range.start, range.end),
-    enabled: Boolean(userId),
+    enabled: Boolean(userId) && !isAll,
+  });
+
+  const allQ = useQuery({
+    queryKey: ["month-all", range.start, range.end],
+    enabled: isAll,
+    queryFn: async () => {
+      const [entries, hours] = await Promise.all([
+        supabase
+          .from("time_entries")
+          .select("user_id, work_date, clock_in, clock_out, break_minutes, absence_type")
+          .gte("work_date", range.start)
+          .lte("work_date", range.end),
+        supabase
+          .from("project_hours")
+          .select("user_id, project_id, hours")
+          .gte("work_date", range.start)
+          .lte("work_date", range.end),
+      ]);
+      if (entries.error) throw entries.error;
+      if (hours.error) throw hours.error;
+      return { entries: entries.data ?? [], projectHours: hours.data ?? [] };
+    },
   });
 
   const projectName = (id: string) => {
@@ -114,6 +137,45 @@ function ReportPage() {
       ? profile?.full_name || profile?.email
       : staffQ.data?.find((s) => s.id === target)?.full_name;
 
+  const staffLabel = (id: string) => {
+    const s = staffQ.data?.find((x) => x.id === id);
+    return s?.full_name || s?.email || "עובד";
+  };
+
+  const summary = useMemo(() => {
+    if (!isAll || !allQ.data) return null;
+    const perEmployee = new Map<string, { attendance: number; project: number; absences: number }>();
+    for (const e of allQ.data.entries) {
+      const cur = perEmployee.get(e.user_id) ?? { attendance: 0, project: 0, absences: 0 };
+      cur.attendance += computeHours(
+        trimTime(e.clock_in ?? null),
+        trimTime(e.clock_out ?? null),
+        e.break_minutes ?? 0,
+      );
+      if (e.absence_type) cur.absences += 1;
+      perEmployee.set(e.user_id, cur);
+    }
+    const perProject = new Map<string, number>();
+    const matrix = new Map<string, Map<string, number>>();
+    for (const h of allQ.data.projectHours) {
+      const v = Number(h.hours ?? 0);
+      const cur = perEmployee.get(h.user_id) ?? { attendance: 0, project: 0, absences: 0 };
+      cur.project += v;
+      perEmployee.set(h.user_id, cur);
+      perProject.set(h.project_id, (perProject.get(h.project_id) ?? 0) + v);
+      const row = matrix.get(h.project_id) ?? new Map<string, number>();
+      row.set(h.user_id, (row.get(h.user_id) ?? 0) + v);
+      matrix.set(h.project_id, row);
+    }
+    return {
+      employees: [...perEmployee.entries()].sort((a, b) => b[1].attendance - a[1].attendance),
+      projects: [...perProject.entries()].sort((a, b) => b[1] - a[1]),
+      matrix,
+      totalAttendance: [...perEmployee.values()].reduce((s, v) => s + v.attendance, 0),
+      totalProject: [...perProject.values()].reduce((s, v) => s + v, 0),
+    };
+  }, [isAll, allQ.data]);
+
   return (
     <div className="space-y-6">
       <div className="no-print flex flex-wrap items-end justify-between gap-4 print:hidden">
@@ -131,6 +193,7 @@ function ReportPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="me">הדוח שלי</SelectItem>
+                  <SelectItem value="all">דוח מרכז – כל העובדים</SelectItem>
                   {staffQ.data?.map((s) => (
                     <SelectItem key={s.id} value={s.id}>
                       {s.full_name || s.email}
