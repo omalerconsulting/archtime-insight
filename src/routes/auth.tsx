@@ -175,8 +175,8 @@ function AuthPage() {
         </div>
 
         <p className="mt-6 text-center text-sm text-muted-foreground">
-          <Link to="/help" className="underline">
-            הוראות הפעלה
+          <Link to="/" className="underline">
+            על המערכת והוראות הפעלה
           </Link>
         </p>
       </div>
