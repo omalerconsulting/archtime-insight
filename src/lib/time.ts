@@ -89,7 +89,33 @@ export function todayIso() {
 
 export function nowTime() {
   const now = new Date();
-  return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
+}
+
+/** Normalize free text into 24h HH:MM:SS ("" when empty/invalid). Seconds default to 00. */
+export function normalizeTime(value: string): string {
+  const raw = (value ?? "").trim();
+  if (!raw) return "";
+  const digits = raw.replace(/\D/g, "");
+  let h: number, m: number, s: number;
+  if (raw.includes(":")) {
+    const [a, b, c] = raw.split(":");
+    h = Number(a);
+    m = Number(b ?? 0);
+    s = Number(c ?? 0);
+  } else if (digits.length <= 2) {
+    h = Number(digits);
+    m = 0;
+    s = 0;
+  } else {
+    h = Number(digits.slice(0, digits.length - 4 > 0 ? 2 : digits.length - 2));
+    m = Number(digits.slice(digits.length - 4 > 0 ? 2 : digits.length - 2, digits.length - 4 > 0 ? 4 : digits.length));
+    s = digits.length > 4 ? Number(digits.slice(4, 6)) : 0;
+  }
+  if (!Number.isFinite(h) || !Number.isFinite(m) || !Number.isFinite(s)) return "";
+  if (h > 23 || m > 59 || s > 59 || h < 0 || m < 0 || s < 0) return "";
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(h)}:${p(m)}:${p(s)}`;
 }
 
 export function fmtHours(n: number) {

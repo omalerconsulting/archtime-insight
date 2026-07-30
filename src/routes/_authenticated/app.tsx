@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, LogIn, LogOut, Plus, Save, Trash2 } from "lucide-react";
+import { AlertTriangle, Coffee, LogIn, LogOut, Plus, Play, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -14,6 +14,7 @@ import {
   iso,
   monthRange,
   MONTH_NAMES,
+  normalizeTime,
   nowTime,
   todayIso,
   weekdayOf,
@@ -50,6 +51,43 @@ export const Route = createFileRoute("/_authenticated/app")({
 });
 
 type DayRow = { project_id: string; hours: string; description: string; id?: string };
+
+/** 24h text field, always normalized to HH:MM:SS. */
+function TimeField({
+  id,
+  value,
+  onChange,
+  ...rest
+}: {
+  id?: string;
+  value: string;
+  onChange: (v: string) => void;
+  "aria-label"?: string;
+}) {
+  return (
+    <Input
+      id={id}
+      inputMode="numeric"
+      dir="ltr"
+      className="text-center tabular-nums"
+      placeholder="HH:MM:SS"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      onBlur={(e) => onChange(normalizeTime(e.target.value))}
+      {...rest}
+    />
+  );
+}
+
+const breakKey = (userId: string, date: string) => `break-start:${userId}:${date}`;
+
+function minutesBetween(from: string, to: string) {
+  const [h1, m1, s1 = 0] = from.split(":").map(Number);
+  const [h2, m2, s2 = 0] = to.split(":").map(Number);
+  let sec = h2 * 3600 + m2 * 60 + s2 - (h1 * 3600 + m1 * 60 + s1);
+  if (sec < 0) sec += 86400;
+  return Math.max(0, Math.round(sec / 60));
+}
 
 function TimesheetPage() {
   const { user } = useAuth();
@@ -105,13 +143,28 @@ function TimesheetPage() {
   }, [days, entryByDate, hoursByDate]);
 
   const clockMutation = useMutation({
-    mutationFn: async (kind: "in" | "out") => {
+    mutationFn: async (kind: "in" | "out" | "break-start" | "break-end") => {
       const date = todayIso();
       const existing = entryByDate.get(date);
-      const payload =
-        kind === "in"
-          ? { clock_in: nowTime() }
-          : { clock_out: nowTime() };
+      let payload: {
+        clock_in?: string;
+        clock_out?: string;
+        break_minutes?: number;
+      } = {};
+      if (kind === "in") payload = { clock_in: nowTime() };
+      else if (kind === "out") payload = { clock_out: nowTime() };
+      else if (kind === "break-start") {
+        localStorage.setItem(breakKey(userId, date), nowTime());
+        setBreakStart(nowTime());
+        return;
+      } else {
+        const start = localStorage.getItem(breakKey(userId, date));
+        if (!start) throw new Error("no-break");
+        const added = minutesBetween(start, nowTime());
+        localStorage.removeItem(breakKey(userId, date));
+        setBreakStart(null);
+        payload = { break_minutes: (existing?.break_minutes ?? 0) + added };
+      }
       if (existing) {
         const { error } = await supabase.from("time_entries").update(payload).eq("id", existing.id);
         if (error) throw error;
@@ -123,13 +176,24 @@ function TimesheetPage() {
       }
     },
     onSuccess: (_d, kind) => {
-      toast.success(kind === "in" ? "נרשמה כניסה" : "נרשמה יציאה");
+      toast.success(
+        kind === "in"
+          ? "נרשמה כניסה"
+          : kind === "out"
+            ? "נרשמה יציאה"
+            : kind === "break-start"
+              ? "יצאת להפסקה"
+              : "חזרת מהפסקה – ההפסקה נרשמה",
+      );
       qc.invalidateQueries({ queryKey: ["month"] });
     },
     onError: () => toast.error("שמירת הדיווח נכשלה"),
   });
 
   const todayEntry = entryByDate.get(todayIso());
+  const [breakStart, setBreakStart] = useState<string | null>(() =>
+    typeof window === "undefined" ? null : localStorage.getItem(breakKey(user?.id ?? "", todayIso())),
+  );
 
   const [manual, setManual] = useState({ date: todayIso(), in: "", out: "", brk: "0" });
   const manualSave = useMutation({
@@ -137,8 +201,8 @@ function TimesheetPage() {
       if (!manual.date || (!manual.in && !manual.out)) throw new Error("missing");
       const existing = entryByDate.get(manual.date);
       const payload = {
-        clock_in: manual.in || null,
-        clock_out: manual.out || null,
+        clock_in: normalizeTime(manual.in) || null,
+        clock_out: normalizeTime(manual.out) || null,
         break_minutes: Number(manual.brk) || 0,
       };
       if (existing) {
@@ -210,7 +274,7 @@ function TimesheetPage() {
             {todayEntry?.clock_in ? `כניסה ${trimTime(todayEntry.clock_in)}` : "טרם נרשמה כניסה"}
             {todayEntry?.clock_out ? ` · יציאה ${trimTime(todayEntry.clock_out)}` : ""}
           </p>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button onClick={() => clockMutation.mutate("in")} disabled={clockMutation.isPending}>
               <LogIn className="size-4" />
               כניסה
@@ -223,10 +287,33 @@ function TimesheetPage() {
               <LogOut className="size-4" />
               יציאה
             </Button>
-            <Button variant="secondary" onClick={() => setEditDate(todayIso())}>
-              עריכת היום ופירוק לפרויקטים
+            <Button
+              variant="outline"
+              onClick={() => clockMutation.mutate("break-start")}
+              disabled={clockMutation.isPending || Boolean(breakStart)}
+            >
+              <Coffee className="size-4" />
+              יציאה להפסקה
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => clockMutation.mutate("break-end")}
+              disabled={clockMutation.isPending || !breakStart}
+            >
+              <Play className="size-4" />
+              חזרה מהפסקה
             </Button>
           </div>
+          {breakStart && (
+            <p className="mt-2 text-xs text-muted-foreground">בהפסקה מאז {breakStart}</p>
+          )}
+          <Button
+            size="lg"
+            className="mt-4 w-full text-base font-semibold shadow-md"
+            onClick={() => setEditDate(todayIso())}
+          >
+            עריכת היום ופירוק לפרויקטים
+          </Button>
 
           <div className="mt-5 border-t border-border pt-4">
             <h3 className="mb-3 text-sm font-medium text-muted-foreground">הזנה ידנית של שעות</h3>
@@ -242,20 +329,18 @@ function TimesheetPage() {
               </div>
               <div className="space-y-1">
                 <Label htmlFor="m-in" className="text-xs">כניסה</Label>
-                <Input
+                <TimeField
                   id="m-in"
-                  type="time"
                   value={manual.in}
-                  onChange={(e) => setManual({ ...manual, in: e.target.value })}
+                  onChange={(v) => setManual({ ...manual, in: v })}
                 />
               </div>
               <div className="space-y-1">
                 <Label htmlFor="m-out" className="text-xs">יציאה</Label>
-                <Input
+                <TimeField
                   id="m-out"
-                  type="time"
                   value={manual.out}
-                  onChange={(e) => setManual({ ...manual, out: e.target.value })}
+                  onChange={(v) => setManual({ ...manual, out: v })}
                 />
               </div>
               <div className="space-y-1">
@@ -424,8 +509,8 @@ function DayEditor({
       const payload = {
         user_id: userId,
         work_date: date,
-        clock_in: form.clock_in || null,
-        clock_out: form.clock_out || null,
+        clock_in: normalizeTime(form.clock_in) || null,
+        clock_out: normalizeTime(form.clock_out) || null,
         break_minutes: Number(form.break_minutes) || 0,
         absence_type: form.absence_type === "none" ? null : form.absence_type,
         note: form.note || null,
@@ -482,20 +567,18 @@ function DayEditor({
             <div className="grid gap-4 sm:grid-cols-4">
               <div className="space-y-2">
                 <Label htmlFor="ci">שעת כניסה</Label>
-                <Input
+                <TimeField
                   id="ci"
-                  type="time"
                   value={form.clock_in}
-                  onChange={(e) => setForm({ ...form, clock_in: e.target.value })}
+                  onChange={(v) => setForm({ ...form, clock_in: v })}
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="co">שעת יציאה</Label>
-                <Input
+                <TimeField
                   id="co"
-                  type="time"
                   value={form.clock_out}
-                  onChange={(e) => setForm({ ...form, clock_out: e.target.value })}
+                  onChange={(v) => setForm({ ...form, clock_out: v })}
                 />
               </div>
               <div className="space-y-2">

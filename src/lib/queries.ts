@@ -60,5 +60,7 @@ export async function fetchMonthEntries(userId: string, start: string, end: stri
 }
 
 export function trimTime(t: string | null) {
-  return t ? t.slice(0, 5) : "";
+  if (!t) return "";
+  const v = t.slice(0, 8);
+  return v.length === 5 ? `${v}:00` : v;
 }
