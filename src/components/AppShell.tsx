@@ -20,6 +20,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { MonthEndNotice } from "@/components/MonthEndNotice";
+import { ForcePasswordChange } from "@/components/ForcePasswordChange";
 import officeLogo from "@/assets/office-logo.png";
 
 type NavItem = { to: string; label: string; icon: typeof Building2; adminOnly?: boolean };
