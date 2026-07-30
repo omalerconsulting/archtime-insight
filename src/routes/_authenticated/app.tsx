@@ -416,7 +416,11 @@ function TimesheetPage() {
                 />
               </div>
               <div className="flex items-end">
-                <Button variant="secondary" onClick={() => manualSave.mutate()} disabled={manualSave.isPending}>
+                <Button
+                  variant="secondary"
+                  onClick={() => manualSave.mutate()}
+                  disabled={manualSave.isPending || isDateLocked(manual.date, isAdmin)}
+                >
                   שמירה ידנית
                 </Button>
               </div>
