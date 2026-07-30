@@ -5,6 +5,7 @@ import { AlertTriangle, Coffee, LogIn, LogOut, Plus, Play, Save, Trash2 } from "
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { holidayFor } from "@/lib/holidays";
 import { fetchMonthEntries, fetchProjectDirectory, trimTime, type TimeEntry } from "@/lib/queries";
 import {
   ABSENCE_TYPES,
