@@ -416,6 +416,7 @@ function TimesheetPage() {
               <th scope="col" className="p-3 text-start">שעות נוכחות</th>
               <th scope="col" className="p-3 text-start">שעות פרויקטים</th>
               <th scope="col" className="p-3 text-start">היעדרות</th>
+              <th scope="col" className="p-3 text-start">הערות</th>
               <th scope="col" className="p-3 text-start">פעולה</th>
             </tr>
           </thead>
@@ -430,10 +431,13 @@ function TimesheetPage() {
               const proj = hoursByDate.get(d) ?? 0;
               const mismatch = attendance > 0 && hoursGap(attendance, proj) > 0.5;
               const weekend = ["שישי", "שבת"].includes(weekdayOf(d));
+              const holiday = holidayFor(d);
               return (
                 <tr
                   key={d}
-                  className={`border-t border-border ${weekend ? "bg-muted/30" : ""}`}
+                  className={`border-t border-border ${
+                    holiday?.restDay ? "holiday-row" : weekend ? "bg-muted/30" : ""
+                  }`}
                 >
                   <td className="p-3">{d.slice(8)}/{d.slice(5, 7)}</td>
                   <td className="p-3">{weekdayOf(d)}</td>
@@ -454,6 +458,16 @@ function TimesheetPage() {
                     )}
                   </td>
                   <td className="p-3">{absenceLabel(e?.absence_type) || "—"}</td>
+                  <td className="p-3">
+                    {holiday ? (
+                      <span className={holiday.restDay ? "font-medium" : "text-muted-foreground"}>
+                        {holiday.name}
+                        {holiday.restDay ? " (חופשת חג על פי חוק)" : ""}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </td>
                   <td className="p-3">
                     <Button size="sm" variant="ghost" onClick={() => setEditDate(d)}>
                       עריכה
