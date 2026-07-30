@@ -227,6 +227,54 @@ function TimesheetPage() {
               עריכת היום ופירוק לפרויקטים
             </Button>
           </div>
+
+          <div className="mt-5 border-t border-border pt-4">
+            <h3 className="mb-3 text-sm font-medium text-muted-foreground">הזנה ידנית של שעות</h3>
+            <div className="grid gap-2 sm:grid-cols-[1.2fr_1fr_1fr_0.8fr_auto]">
+              <div className="space-y-1">
+                <Label htmlFor="m-date" className="text-xs">תאריך</Label>
+                <Input
+                  id="m-date"
+                  type="date"
+                  value={manual.date}
+                  onChange={(e) => setManual({ ...manual, date: e.target.value })}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="m-in" className="text-xs">כניסה</Label>
+                <Input
+                  id="m-in"
+                  type="time"
+                  value={manual.in}
+                  onChange={(e) => setManual({ ...manual, in: e.target.value })}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="m-out" className="text-xs">יציאה</Label>
+                <Input
+                  id="m-out"
+                  type="time"
+                  value={manual.out}
+                  onChange={(e) => setManual({ ...manual, out: e.target.value })}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="m-brk" className="text-xs">הפסקה (דק׳)</Label>
+                <Input
+                  id="m-brk"
+                  type="number"
+                  min="0"
+                  value={manual.brk}
+                  onChange={(e) => setManual({ ...manual, brk: e.target.value })}
+                />
+              </div>
+              <div className="flex items-end">
+                <Button variant="secondary" onClick={() => manualSave.mutate()} disabled={manualSave.isPending}>
+                  שמירה ידנית
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
         <StatCard title="סה״כ שעות נוכחות" value={fmtHours(totals.attendance)} />
         <StatCard
