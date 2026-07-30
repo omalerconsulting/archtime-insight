@@ -133,7 +133,7 @@ function FinancePage() {
                 <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} width={70} />
                 <Tooltip formatter={(v: number) => fmtMoney(Number(v))} />
-                <Bar dataKey="amount" name="צפי הכנסה" fill="hsl(var(--accent))" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="amount" name="צפי הכנסה" fill="var(--chart-1)" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
