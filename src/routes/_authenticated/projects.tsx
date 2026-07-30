@@ -657,7 +657,7 @@ function MilestonesPanel({
         </tbody>
       </table>
 
-      <div className="mt-4 grid gap-2 sm:grid-cols-[2fr_1fr_1fr_1fr_auto]">
+      <div className="mt-4 grid gap-2 sm:grid-cols-[minmax(0,2fr)_7rem_minmax(9rem,1fr)_minmax(0,1fr)_auto]">
         <Input
           aria-label="שם השלב"
           placeholder="לדוגמה: חתימה על חוזה"
@@ -675,10 +675,13 @@ function MilestonesPanel({
         </Select>
         <Input
           type="number"
+          step="any"
+          inputMode="decimal"
+          className="min-w-[9rem] font-mono tabular-nums"
           aria-label="ערך"
-          placeholder={draft.amount_type === "percent" ? "30" : "₪"}
+          placeholder={draft.amount_type === "percent" ? "30" : "100000"}
           value={draft.amount_value}
-          onChange={(e) => setDraft({ ...draft, amount_value: e.target.value })}
+          onChange={(e) => setDraft({ ...draft, amount_value: e.target.value.slice(0, 9) })}
         />
         <Input
           type="date"
