@@ -79,6 +79,20 @@ export function monthRange(year: number, month: number) {
   return { start: iso(start), end: iso(end), days: end.getUTCDate() };
 }
 
+/** רשימת שנים דינמית – תמיד תומכת בשנה הנוכחית, בעבר ובשנים הבאות. */
+export function yearOptions(backYears = 10, forwardYears = 5) {
+  const current = new Date().getFullYear();
+  const years: number[] = [];
+  for (let y = current + forwardYears; y >= current - backYears; y--) years.push(y);
+  return years;
+}
+
+function unusedMonthRange(year: number, month: number) {
+  const start = new Date(Date.UTC(year, month, 1));
+  const end = new Date(Date.UTC(year, month + 1, 0));
+  return { start: iso(start), end: iso(end), days: end.getUTCDate() };
+}
+
 export function iso(d: Date) {
   return d.toISOString().slice(0, 10);
 }
