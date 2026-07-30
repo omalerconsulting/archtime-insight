@@ -19,6 +19,19 @@ import { trimTime } from "@/lib/queries";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -158,6 +171,22 @@ function DashboardPage() {
 
   const { rows, employees, totals } = analysis;
   const profit = totals.fee - totals.cost;
+  const topHours = rows.slice(0, 8).map((r) => ({
+    name: `${r.project.code}`,
+    hours: Math.round(r.totalHours * 10) / 10,
+  }));
+  const profitRows = [...rows]
+    .sort((a, b) => b.profit - a.profit)
+    .slice(0, 8)
+    .map((r) => ({ name: r.project.code, profit: Math.round(r.profit) }));
+  const collectionData = [
+    { name: "נגבה", value: Math.max(0, rows.reduce((s, r) => s + r.collected, 0)) },
+    { name: "פתוח לגבייה", value: Math.max(0, totals.outstanding) },
+  ];
+  const employeeData = employees
+    .slice(0, 10)
+    .map((e) => ({ name: e.emp.full_name || e.emp.email, hours: Math.round(e.projectHours * 10) / 10 }));
+  const pieColors = ["var(--chart-3)", "var(--chart-1)"];
 
   return (
     <div className="space-y-6">
@@ -224,6 +253,51 @@ function DashboardPage() {
             </span>
           </div>
         )}
+
+        <section className="no-print grid gap-4 lg:grid-cols-2 print:hidden">
+          <ChartCard title="שעות מושקעות לפי פרויקט (Top 8)">
+            <BarChart data={topHours}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} width={50} />
+              <Tooltip formatter={(v: number) => `${v} שעות`} />
+              <Bar dataKey="hours" name="שעות" fill="var(--chart-1)" radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ChartCard>
+          <ChartCard title="רווח גולמי לפי פרויקט">
+            <BarChart data={profitRows}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} width={70} />
+              <Tooltip formatter={(v: number) => fmtMoney(Number(v))} />
+              <Bar dataKey="profit" name="רווח" radius={[6, 6, 0, 0]}>
+                {profitRows.map((r) => (
+                  <Cell key={r.name} fill={r.profit >= 0 ? "var(--chart-3)" : "var(--destructive)"} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ChartCard>
+          <ChartCard title="מצב גבייה">
+            <PieChart>
+              <Pie data={collectionData} dataKey="value" nameKey="name" innerRadius={55} outerRadius={90}>
+                {collectionData.map((d, i) => (
+                  <Cell key={d.name} fill={pieColors[i]} />
+                ))}
+              </Pie>
+              <Legend />
+              <Tooltip formatter={(v: number) => fmtMoney(Number(v))} />
+            </PieChart>
+          </ChartCard>
+          <ChartCard title="שעות עובדים משויכות לפרויקטים">
+            <BarChart data={employeeData} layout="vertical">
+              <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+              <XAxis type="number" tick={{ fontSize: 11 }} />
+              <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 11 }} />
+              <Tooltip formatter={(v: number) => `${v} שעות`} />
+              <Bar dataKey="hours" name="שעות" fill="var(--chart-2)" radius={[0, 6, 6, 0]} />
+            </BarChart>
+          </ChartCard>
+        </section>
 
         <section className="overflow-x-auto rounded-xl border border-border bg-card">
           <table className="w-full text-sm">
