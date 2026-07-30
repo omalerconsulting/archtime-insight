@@ -10,6 +10,7 @@ export type Profile = {
   hourly_rate: number | null;
   cost_rate: number | null;
   is_active: boolean;
+  must_change_password?: boolean | null;
 };
 
 type AuthState = {
