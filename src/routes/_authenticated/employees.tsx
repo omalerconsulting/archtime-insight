@@ -179,6 +179,62 @@ function EmployeesPage() {
   );
 }
 function NewUserDialog({ onCreated }: { onCreated: () => void }) {
+  return <NewUserDialogInner onCreated={onCreated} />;
+}
+
+function ResetPasswordDialog({ userId, name }: { userId: string; name: string }) {
+  const [open, setOpen] = useState(false);
+  const [pw, setPw] = useState("");
+  const reset = useServerFn(resetEmployeePassword);
+
+  const mut = useMutation({
+    mutationFn: async () => {
+      if (pw.length < 8) throw new Error("סיסמה קצרה מדי");
+      await reset({ data: { user_id: userId, password: pw } });
+    },
+    onSuccess: () => {
+      toast.success("הסיסמה אופסה. העובד יתבקש להגדיר סיסמה חדשה בכניסה הבאה");
+      setPw("");
+      setOpen(false);
+    },
+    onError: (e: unknown) =>
+      toast.error(`איפוס הסיסמה נכשל: ${e instanceof Error ? e.message : "שגיאה"}`),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline" aria-label={`איפוס סיסמה עבור ${name}`}>
+          <KeyRound className="size-4" />
+          איפוס סיסמה
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>איפוס סיסמה – {name}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-2">
+          <Label htmlFor={`rp-${userId}`}>סיסמה זמנית (8 תווים לפחות)</Label>
+          <Input id={`rp-${userId}`} type="text" value={pw} onChange={(e) => setPw(e.target.value)} />
+          <p className="text-xs text-muted-foreground">
+            יש למסור את הסיסמה הזמנית לעובד. בכניסה הבאה הוא יידרש להגדיר סיסמה חדשה משלו לפני
+            שיוכל להשתמש במערכת.
+          </p>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>
+            ביטול
+          </Button>
+          <Button onClick={() => mut.mutate()} disabled={mut.isPending}>
+            איפוס סיסמה
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function NewUserDialogInner({ onCreated }: { onCreated: () => void }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ full_name: "", email: "", password: "", is_admin: false });
   const create = useServerFn(createEmployee);
