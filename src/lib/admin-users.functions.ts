@@ -43,3 +43,34 @@ export const createEmployee = createServerFn({ method: "POST" })
     }
     return { id: newId };
   });
+
+const resetSchema = z.object({
+  user_id: z.string().uuid(),
+  password: z.string().min(8).max(72),
+});
+
+export const resetEmployeePassword = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => resetSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    const { data: roles, error: roleErr } = await context.supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", context.userId)
+      .eq("role", "admin");
+    if (roleErr) throw new Error(roleErr.message);
+    if (!roles || roles.length === 0) throw new Error("forbidden");
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const upd = await supabaseAdmin.auth.admin.updateUserById(data.user_id, {
+      password: data.password,
+    });
+    if (upd.error) throw new Error(upd.error.message);
+
+    const { error } = await supabaseAdmin
+      .from("profiles")
+      .update({ must_change_password: true })
+      .eq("id", data.user_id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
