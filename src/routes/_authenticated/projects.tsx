@@ -64,7 +64,9 @@ type Milestone = {
 
 function ProjectsPage() {
   const qc = useQueryClient();
-  const [selected, setSelected] = useState<string | null>(null);
+  const [checked, setChecked] = useState<string[]>([]);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
 
   const projectsQ = useQuery({
     queryKey: ["projects-full"],
@@ -80,20 +82,34 @@ function ProjectsPage() {
   });
 
   const del = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("projects").delete().eq("id", id);
+    mutationFn: async (ids: string[]) => {
+      const { error } = await supabase.from("projects").delete().in("id", ids);
       if (error) throw error;
     },
-    onSuccess: () => {
-      toast.success("הפרויקט נמחק");
+    onSuccess: (_d, ids) => {
+      toast.success(ids.length > 1 ? `${ids.length} פרויקטים נמחקו` : "הפרויקט נמחק");
+      setChecked((c) => c.filter((id) => !ids.includes(id)));
       qc.invalidateQueries({ queryKey: ["projects-full"] });
       qc.invalidateQueries({ queryKey: ["projects-dir"] });
     },
     onError: () => toast.error("מחיקה נכשלה – ייתכן שקיימות שעות מדווחות"),
   });
 
-  const projects = projectsQ.data?.projects ?? [];
+  const allProjects = projectsQ.data?.projects ?? [];
   const milestones = projectsQ.data?.milestones ?? [];
+  const q = search.trim().toLowerCase();
+  const projects = allProjects.filter(
+    (p) =>
+      (statusFilter === "all" || p.status === statusFilter) &&
+      (!q ||
+        p.code.toLowerCase().includes(q) ||
+        p.name.toLowerCase().includes(q) ||
+        (p.client_name ?? "").toLowerCase().includes(q)),
+  );
+  const allChecked = projects.length > 0 && projects.every((p) => checked.includes(p.id));
+  const toggle = (id: string) =>
+    setChecked((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
+  const checkedProjects = allProjects.filter((p) => checked.includes(p.id));
 
   return (
     <div className="space-y-6">
@@ -101,7 +117,7 @@ function ProjectsPage() {
         <div>
           <h1 className="text-2xl font-bold">ניהול פרויקטים</h1>
           <p className="text-sm text-muted-foreground">
-            {projects.length} פרויקטים · קוד, שכר טרחה, תנאי תשלום ולוחות זמנים
+            מוצגים {projects.length} מתוך {allProjects.length} פרויקטים · קוד, שכר טרחה, תנאי תשלום ולוחות זמנים
           </p>
         </div>
         <div className="flex gap-2">
@@ -112,11 +128,63 @@ function ProjectsPage() {
         </div>
       </div>
 
+      <div className="no-print flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-4 print:hidden">
+        <Input
+          className="w-64"
+          aria-label="חיפוש פרויקט"
+          placeholder="חיפוש לפי קוד, שם או לקוח"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-44" aria-label="סינון לפי סטטוס">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">כל הסטטוסים</SelectItem>
+            {PROJECT_STATUSES.map((s) => (
+              <SelectItem key={s.value} value={s.value}>
+                {s.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <span className="text-sm text-muted-foreground">{checked.length} מסומנים</span>
+        {checked.length > 0 && (
+          <>
+            <Button variant="outline" size="sm" onClick={() => setChecked([])}>
+              ניקוי סימון
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => {
+                if (confirm(`למחוק ${checked.length} פרויקטים מסומנים?`)) del.mutate(checked);
+              }}
+            >
+              <Trash2 className="size-4" />
+              מחיקת המסומנים
+            </Button>
+          </>
+        )}
+      </div>
+
       <div className="print-area overflow-x-auto rounded-xl border border-border bg-card">
         <table className="w-full text-sm">
           <caption className="sr-only">רשימת פרויקטים</caption>
           <thead className="bg-muted/60">
             <tr>
+              <th scope="col" className="p-3 text-start no-print print:hidden">
+                <input
+                  type="checkbox"
+                  aria-label="סימון כל הפרויקטים"
+                  className="size-4 accent-[var(--primary)]"
+                  checked={allChecked}
+                  onChange={() =>
+                    setChecked(allChecked ? [] : Array.from(new Set(projects.map((p) => p.id))))
+                  }
+                />
+              </th>
               <th scope="col" className="p-3 text-start">קוד</th>
               <th scope="col" className="p-3 text-start">שם הפרויקט</th>
               <th scope="col" className="p-3 text-start">לקוח</th>
@@ -142,13 +210,24 @@ function ProjectsPage() {
               return (
                 <tr
                   key={p.id}
-                  className={`border-t border-border ${late ? "bg-destructive/10" : ""}`}
+                  className={`border-t border-border ${late ? "bg-destructive/10" : ""} ${
+                    checked.includes(p.id) ? "bg-accent/10" : ""
+                  }`}
                 >
+                  <td className="p-3 no-print print:hidden">
+                    <input
+                      type="checkbox"
+                      aria-label={`סימון ${p.name}`}
+                      className="size-4 accent-[var(--primary)]"
+                      checked={checked.includes(p.id)}
+                      onChange={() => toggle(p.id)}
+                    />
+                  </td>
                   <td className="p-3 font-mono">{p.code}</td>
                   <td className="p-3 font-medium">
                     <button
                       className="underline-offset-2 hover:underline"
-                      onClick={() => setSelected(selected === p.id ? null : p.id)}
+                      onClick={() => toggle(p.id)}
                     >
                       {p.name}
                     </button>
@@ -178,7 +257,7 @@ function ProjectsPage() {
                         variant="ghost"
                         aria-label={`מחיקת ${p.name}`}
                         onClick={() => {
-                          if (confirm(`למחוק את הפרויקט ${p.name}?`)) del.mutate(p.id);
+                          if (confirm(`למחוק את הפרויקט ${p.name}?`)) del.mutate([p.id]);
                         }}
                       >
                         <Trash2 className="size-4" />
@@ -190,8 +269,8 @@ function ProjectsPage() {
             })}
             {projects.length === 0 && (
               <tr>
-                <td colSpan={9} className="p-6 text-center text-muted-foreground">
-                  עדיין לא הוגדרו פרויקטים. התחל בהוספת פרויקט חדש.
+                <td colSpan={10} className="p-6 text-center text-muted-foreground">
+                  {allProjects.length ? "לא נמצאו פרויקטים התואמים לסינון." : "עדיין לא הוגדרו פרויקטים. התחל בהוספת פרויקט חדש."}
                 </td>
               </tr>
             )}
@@ -199,13 +278,14 @@ function ProjectsPage() {
         </table>
       </div>
 
-      {selected && (
+      {checkedProjects.map((p) => (
         <MilestonesPanel
-          project={projects.find((p) => p.id === selected)!}
-          milestones={milestones.filter((m) => m.project_id === selected)}
+          key={p.id}
+          project={p}
+          milestones={milestones.filter((m) => m.project_id === p.id)}
           onChanged={() => qc.invalidateQueries({ queryKey: ["projects-full"] })}
         />
-      )}
+      ))}
     </div>
   );
 }
