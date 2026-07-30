@@ -669,7 +669,13 @@ function DayEditor({
 
         {form && rows && (
           <div className="space-y-6">
+            {locked && (
+              <p className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm font-medium text-destructive">
+                תקופת הדיווח נעולה – ניתן לצפות בלבד. לעדכון בדיעבד יש לפנות למנהל.
+              </p>
+            )}
             <div className="grid gap-4 sm:grid-cols-4">
+              <fieldset disabled={locked} className="contents">
               <div className="space-y-2">
                 <Label htmlFor="ci">שעת כניסה</Label>
                 <TimeField
@@ -701,6 +707,7 @@ function DayEditor({
                 <Select
                   value={form.absence_type}
                   onValueChange={(v) => setForm({ ...form, absence_type: v })}
+                  disabled={locked}
                 >
                   <SelectTrigger id="ab">
                     <SelectValue />
@@ -715,6 +722,7 @@ function DayEditor({
                   </SelectContent>
                 </Select>
               </div>
+              </fieldset>
             </div>
 
             <div className="space-y-2">
@@ -722,6 +730,7 @@ function DayEditor({
               <Textarea
                 id="note"
                 rows={2}
+                disabled={locked}
                 value={form.note}
                 onChange={(e) => setForm({ ...form, note: e.target.value })}
               />
@@ -733,6 +742,7 @@ function DayEditor({
                 <Button
                   size="sm"
                   variant="outline"
+                  disabled={locked}
                   onClick={() =>
                     setRows([...rows, { project_id: "", hours: "", description: "" }])
                   }
