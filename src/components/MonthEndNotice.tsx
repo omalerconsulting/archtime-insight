@@ -30,10 +30,10 @@ export function MonthEndNotice() {
   return (
     <div
       role="status"
-      className="mb-4 flex items-start gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4"
+      className="mb-4 flex items-start gap-4 rounded-xl border-2 border-amber-500/60 bg-amber-500/15 p-5"
     >
-      <CalendarClock className="mt-0.5 size-5 shrink-0 text-amber-600" aria-hidden />
-      <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+      <CalendarClock className="mt-0.5 size-9 shrink-0 text-amber-600" aria-hidden />
+      <p className="text-lg font-bold leading-snug text-amber-900 dark:text-amber-200 sm:text-xl">
         {MONTH_END_MESSAGE}
       </p>
     </div>
