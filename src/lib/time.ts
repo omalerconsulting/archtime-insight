@@ -164,13 +164,6 @@ export function hoursGap(a: number, b: number): number {
   return Math.abs(Math.round(a * 60) - Math.round(b * 60)) / 60;
 }
 
-function _fmtHoursLegacy(n: number) {
-  return (Math.round(n * 100) / 100).toLocaleString("he-IL", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
-
 export function fmtMoney(n: number) {
   return n.toLocaleString("he-IL", { style: "currency", currency: "ILS", maximumFractionDigits: 0 });
 }
