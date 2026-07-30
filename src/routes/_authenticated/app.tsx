@@ -5,7 +5,7 @@ import { AlertTriangle, LogIn, LogOut, Plus, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
-import { fetchMonthEntries, fetchProjectDirectory, trimTime } from "@/lib/queries";
+import { fetchMonthEntries, fetchProjectDirectory, trimTime, type TimeEntry } from "@/lib/queries";
 import {
   ABSENCE_TYPES,
   absenceLabel,
@@ -78,7 +78,7 @@ function TimesheetPage() {
   }, [range.days, year, month]);
 
   const entryByDate = useMemo(() => {
-    const map = new Map<string, (typeof monthQ.data)["entries"][number]>();
+    const map = new Map<string, TimeEntry>();
     monthQ.data?.entries.forEach((e) => map.set(e.work_date, e));
     return map;
   }, [monthQ.data]);
