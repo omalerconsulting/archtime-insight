@@ -53,6 +53,7 @@ export type Database = {
           hourly_rate: number | null
           id: string
           is_active: boolean
+          must_change_password: boolean
           phone: string | null
           updated_at: string
         }
@@ -64,6 +65,7 @@ export type Database = {
           hourly_rate?: number | null
           id: string
           is_active?: boolean
+          must_change_password?: boolean
           phone?: string | null
           updated_at?: string
         }
@@ -75,6 +77,7 @@ export type Database = {
           hourly_rate?: number | null
           id?: string
           is_active?: boolean
+          must_change_password?: boolean
           phone?: string | null
           updated_at?: string
         }
