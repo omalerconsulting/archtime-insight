@@ -542,11 +542,13 @@ function DayEditor({
   date,
   userId,
   projects,
+  locked,
   onClose,
 }: {
   date: string;
   userId: string;
   projects: Array<{ id: string; code: string; name: string }>;
+  locked?: boolean;
   onClose: () => void;
 }) {
   const qc = useQueryClient();
@@ -597,6 +599,7 @@ function DayEditor({
   const save = useMutation({
     mutationFn: async () => {
       if (!form || !rows) return;
+      if (locked) throw new Error("locked");
       const existing = dayQ.data?.entry as Partial<TimeEntry> | null | undefined;
       const changed =
         (normalizeTime(form.clock_in) || null) !== (existing?.clock_in ?? null) ||
@@ -644,7 +647,12 @@ function DayEditor({
       qc.invalidateQueries({ queryKey: ["day"] });
       onClose();
     },
-    onError: () => toast.error("שמירת הדיווח נכשלה"),
+    onError: (e: Error) =>
+      toast.error(
+        e.message === "locked"
+          ? "תקופת הדיווח נעולה לשינויים – יש לפנות למנהל"
+          : "שמירת הדיווח נכשלה",
+      ),
   });
 
   const attendance = form ? computeHours(form.clock_in, form.clock_out, Number(form.break_minutes) || 0) : 0;
