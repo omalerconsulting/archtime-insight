@@ -213,9 +213,30 @@ function ReportPage() {
               <tr key={r.date} className="border-t border-border">
                 <td className="p-2">{r.date.slice(8)}/{r.date.slice(5, 7)}</td>
                 <td className="p-2">{weekdayOf(r.date)}</td>
-                <td className="p-2">{trimTime(r.entry?.clock_in ?? null) || "—"}</td>
-                <td className="p-2">{trimTime(r.entry?.clock_out ?? null) || "—"}</td>
-                <td className="p-2">{r.entry?.break_minutes ?? 0}</td>
+                <td className={`p-2 ${r.entry?.manually_edited ? "font-semibold text-destructive" : ""}`}>
+                  {trimTime(r.entry?.clock_in ?? null) || "—"}
+                  {isAdmin && r.entry?.manually_edited && (
+                    <span className="block text-xs font-normal text-destructive">
+                      במקור: {trimTime(r.entry.original_clock_in ?? null) || "ללא"}
+                    </span>
+                  )}
+                </td>
+                <td className={`p-2 ${r.entry?.manually_edited ? "font-semibold text-destructive" : ""}`}>
+                  {trimTime(r.entry?.clock_out ?? null) || "—"}
+                  {isAdmin && r.entry?.manually_edited && (
+                    <span className="block text-xs font-normal text-destructive">
+                      במקור: {trimTime(r.entry.original_clock_out ?? null) || "ללא"}
+                    </span>
+                  )}
+                </td>
+                <td className={`p-2 ${r.entry?.manually_edited ? "font-semibold text-destructive" : ""}`}>
+                  {r.entry?.break_minutes ?? 0}
+                  {isAdmin && r.entry?.manually_edited && (
+                    <span className="block text-xs font-normal text-destructive">
+                      במקור: {r.entry.original_break_minutes ?? 0}
+                    </span>
+                  )}
+                </td>
                 <td className="p-2">{r.attendance ? fmtHours(r.attendance) : "—"}</td>
                 <td className="p-2">{absenceLabel(r.entry?.absence_type) || "—"}</td>
                 <td className="p-2">

@@ -132,7 +132,6 @@ export function AppShell({ children }: { children: ReactNode }) {
             </Button>
             <div className="hidden text-end sm:block">
               <p className="text-sm font-medium">{profile?.full_name || profile?.email}</p>
-              <p className="text-xs text-muted-foreground">{isAdmin ? "מנהל" : "עובד"}</p>
             </div>
             <Button variant="outline" size="sm" onClick={signOut}>
               <LogOut className="size-4" />

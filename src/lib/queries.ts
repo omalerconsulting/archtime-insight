@@ -23,6 +23,11 @@ export type TimeEntry = {
   break_minutes: number;
   absence_type: string | null;
   note: string | null;
+  manually_edited?: boolean | null;
+  manual_edited_at?: string | null;
+  original_clock_in?: string | null;
+  original_clock_out?: string | null;
+  original_break_minutes?: number | null;
 };
 
 export type ProjectHour = {
