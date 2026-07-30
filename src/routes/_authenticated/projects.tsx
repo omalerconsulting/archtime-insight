@@ -5,7 +5,15 @@ import { AlertTriangle, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminOnly } from "@/components/AdminOnly";
-import { daysBetween, fmtDate, fmtMoney, milestoneAmount, todayIso } from "@/lib/time";
+import {
+  daysBetween,
+  fmtDate,
+  fmtMoney,
+  milestoneAmount,
+  PROJECT_STATUSES,
+  projectStatusLabel,
+  todayIso,
+} from "@/lib/time";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -158,7 +166,7 @@ function ProjectsPage() {
                       </span>
                     )}
                   </td>
-                  <td className="p-3">{p.status === "active" ? "פעיל" : p.status === "closed" ? "סגור" : "בהמתנה"}</td>
+                  <td className="p-3">{projectStatusLabel(p.status)}</td>
                   <td className="p-3 no-print print:hidden">
                     <div className="flex gap-1">
                       <ProjectDialog
