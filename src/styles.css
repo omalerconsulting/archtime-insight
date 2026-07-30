@@ -194,6 +194,13 @@ html.a11y-no-motion * {
   scroll-behavior: auto !important;
 }
 
+/* שורת יום חג / מנוחה בדוחות – צהוב בהיר, ניתן עדיין להזין בה שעות */
+.holiday-row {
+  background-color: color-mix(in oklab, var(--color-warning) 22%, var(--color-card));
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
 @media print {
   .no-print {
     display: none !important;
