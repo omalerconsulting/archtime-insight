@@ -15,11 +15,12 @@ export function absenceLabel(value: string | null | undefined) {
 
 export const PROJECT_STATUSES = [
   { value: "active", label: "פעיל" },
-  { value: "quote", label: "בהצעת מחיר" },
   { value: "closed", label: "פרויקט הסתיים" },
 ] as const;
 
 export function projectStatusLabel(value: string) {
+  if (value === "quote") return "בהצעת מחיר";
+  if (value === "done") return "פרויקט הסתיים";
   return PROJECT_STATUSES.find((s) => s.value === value)?.label ?? value;
 }
 
