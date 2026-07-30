@@ -11,6 +11,9 @@ export type Profile = {
   cost_rate: number | null;
   is_active: boolean;
   must_change_password?: boolean | null;
+  is_approved?: boolean | null;
+  national_id?: string | null;
+  birth_date?: string | null;
 };
 
 type AuthState = {
