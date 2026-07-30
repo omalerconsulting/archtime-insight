@@ -212,6 +212,7 @@ function ProjectsPage() {
 
 type ProjectRow = {
   id: string;
+  id: string;
   code: string;
   name: string;
   client_name: string | null;
