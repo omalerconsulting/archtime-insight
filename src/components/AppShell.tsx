@@ -19,6 +19,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
+import officeLogo from "@/assets/office-logo.png";
 
 type NavItem = { to: string; label: string; icon: typeof Building2; adminOnly?: boolean };
 
@@ -41,7 +42,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [dark, setDark] = useState(false);
   const [logo, setLogo] = useState<string | null>(null);
-  const [officeName, setOfficeName] = useState("משרד אדריכלים");
+  const [officeName, setOfficeName] = useState("סימאונה אדריכלים");
 
   useEffect(() => {
     const saved = window.localStorage.getItem("theme") === "dark";
@@ -57,7 +58,9 @@ export function AppShell({ children }: { children: ReactNode }) {
       .then(({ data }) => {
         if (data) {
           setLogo(data.logo_url);
-          setOfficeName(data.office_name);
+          if (data.office_name && data.office_name !== "משרד אדריכלים") {
+            setOfficeName(data.office_name);
+          }
         }
       });
   }, []);
@@ -93,11 +96,11 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Button>
 
           <Link to="/app" className="flex items-center gap-3">
-            {logo ? (
-              <img src={logo} alt={`הלוגו של ${officeName}`} className="h-9 w-auto" />
-            ) : (
-              <Building2 className="size-6 text-accent" aria-hidden />
-            )}
+            <img
+              src={logo || officeLogo}
+              alt={`הלוגו של ${officeName}`}
+              className="h-9 w-auto object-contain"
+            />
             <span className="text-base font-semibold">{officeName}</span>
           </Link>
 
