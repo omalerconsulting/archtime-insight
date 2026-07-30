@@ -357,11 +357,15 @@ function ReportPage() {
               <th scope="col" className="p-2 text-start">שעות</th>
               <th scope="col" className="p-2 text-start">היעדרות</th>
               <th scope="col" className="p-2 text-start">מס׳ פרויקט</th>
+              <th scope="col" className="p-2 text-start">הערות</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.date} className="border-t border-border">
+              <tr
+                key={r.date}
+                className={`border-t border-border ${r.holiday?.restDay ? "holiday-row" : ""}`}
+              >
                 <td className="p-2">{r.date.slice(8)}/{r.date.slice(5, 7)}</td>
                 <td className="p-2">{weekdayOf(r.date)}</td>
                 <td className={`p-2 ${r.entry?.manually_edited ? "font-semibold text-destructive" : ""}`}>
@@ -392,6 +396,16 @@ function ReportPage() {
                 <td className="p-2">{absenceLabel(r.entry?.absence_type) || "—"}</td>
                 <td className="p-2">
                   {r.hrs.length ? r.hrs.map((h) => projectCode(h.project_id)).join(", ") : "—"}
+                </td>
+                <td className="p-2">
+                  {r.holiday ? (
+                    <span className={r.holiday.restDay ? "font-medium" : "text-muted-foreground"}>
+                      {r.holiday.name}
+                      {r.holiday.restDay ? " (חופשת חג על פי חוק)" : ""}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
                 </td>
               </tr>
             ))}
