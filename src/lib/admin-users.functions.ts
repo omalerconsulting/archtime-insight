@@ -33,7 +33,7 @@ export const createEmployee = createServerFn({ method: "POST" })
 
     await supabaseAdmin
       .from("profiles")
-      .upsert({ id: newId, full_name: data.full_name, email: data.email });
+      .upsert({ id: newId, full_name: data.full_name, email: data.email, is_approved: true });
 
     if (data.is_admin) {
       await supabaseAdmin.from("user_roles").upsert(
