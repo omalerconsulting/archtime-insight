@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { Building2, Clock, FileText, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
+import officeLogo from "@/assets/office-logo.png";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -66,12 +67,21 @@ function Index() {
 
       <div className="relative">
         <header className="border-b border-border/60 backdrop-blur-sm">
-          <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
-            <div className="flex items-center gap-2">
+          <div className="mx-auto grid max-w-6xl grid-cols-[1fr_auto_1fr] items-center gap-4 px-6 py-4">
+            <div className="flex items-center gap-2 justify-self-start">
               <Building2 className="size-6 text-accent" aria-hidden />
-              <span className="text-lg font-semibold">מערכת ניהול שעות ופרויקטים</span>
+              <span className="text-base font-semibold md:text-lg">
+                מערכת ניהול שעות ופרויקטים
+              </span>
             </div>
-            <Button asChild>
+            <img
+              src={officeLogo}
+              alt="לוגו סימאונה אדריכלים"
+              width={816}
+              height={816}
+              className="h-10 w-auto justify-self-center opacity-90 transition-opacity duration-300 hover:opacity-100 md:h-12"
+            />
+            <Button asChild className="justify-self-end">
               <Link to="/auth">כניסה למערכת</Link>
             </Button>
           </div>
@@ -80,7 +90,7 @@ function Index() {
         <main>
           <section className="mx-auto max-w-6xl px-6 py-24 text-center md:py-32">
             <p className="mb-6 inline-flex animate-fade-in items-center rounded-full border border-accent/30 bg-accent/10 px-4 py-1.5 text-xs font-medium tracking-widest text-accent">
-              למשרדי אדריכלים
+              סימאונה אדריכלים
             </p>
             <h1 className="mx-auto max-w-4xl animate-fade-in bg-gradient-to-l from-foreground via-foreground to-accent bg-clip-text text-4xl leading-tight font-bold text-transparent md:text-6xl">
               מערכת ניהול שעות לעובדים
