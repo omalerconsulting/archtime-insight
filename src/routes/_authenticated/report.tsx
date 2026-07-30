@@ -240,6 +240,92 @@ function ReportPage() {
         </div>
       </div>
 
+      {isAll ? (
+        <div className="print-area space-y-6 rounded-xl border border-border bg-card p-6">
+          <header className="border-b border-border pb-4">
+            <h2 className="text-xl font-bold">
+              דוח שעות מרכז – {MONTH_NAMES[month]} {year}
+            </h2>
+            <p className="text-sm text-muted-foreground">כל העובדים, וכל השעות לפי פרויקטים</p>
+          </header>
+
+          {allQ.isLoading && <p className="text-sm text-muted-foreground">טוען נתונים…</p>}
+
+          {summary && (
+            <>
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                <Summary label="סה״כ שעות נוכחות" value={fmtHours(summary.totalAttendance)} />
+                <Summary label="סה״כ שעות בפרויקטים" value={fmtHours(summary.totalProject)} />
+                <Summary label="עובדים מדווחים" value={String(summary.employees.length)} />
+                <Summary label="פרויקטים פעילים בדיווח" value={String(summary.projects.length)} />
+              </div>
+
+              <table className="w-full text-sm">
+                <caption className="mb-2 text-start font-semibold">סיכום לפי עובד</caption>
+                <thead className="bg-muted/60">
+                  <tr>
+                    <th scope="col" className="p-2 text-start">עובד/ת</th>
+                    <th scope="col" className="p-2 text-start">שעות נוכחות</th>
+                    <th scope="col" className="p-2 text-start">שעות בפרויקטים</th>
+                    <th scope="col" className="p-2 text-start">פער</th>
+                    <th scope="col" className="p-2 text-start">ימי היעדרות</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {summary.employees.map(([uid, v]) => (
+                    <tr key={uid} className="border-t border-border">
+                      <td className="p-2">{staffLabel(uid)}</td>
+                      <td className="p-2">{fmtHours(v.attendance)}</td>
+                      <td className="p-2">{fmtHours(v.project)}</td>
+                      <td className="p-2">{fmtHours(Math.abs(v.attendance - v.project))}</td>
+                      <td className="p-2">{v.absences}</td>
+                    </tr>
+                  ))}
+                  {summary.employees.length === 0 && (
+                    <tr>
+                      <td className="p-2 text-muted-foreground" colSpan={5}>
+                        אין דיווחים בחודש זה.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+
+              <table className="w-full text-sm">
+                <caption className="mb-2 text-start font-semibold">סיכום לפי פרויקט</caption>
+                <thead className="bg-muted/60">
+                  <tr>
+                    <th scope="col" className="p-2 text-start">פרויקט</th>
+                    <th scope="col" className="p-2 text-start">סה״כ שעות</th>
+                    <th scope="col" className="p-2 text-start">פירוט לפי עובד</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {summary.projects.map(([pid, h]) => (
+                    <tr key={pid} className="border-t border-border align-top">
+                      <td className="p-2">{projectName(pid)}</td>
+                      <td className="p-2 font-semibold">{fmtHours(h)}</td>
+                      <td className="p-2 text-muted-foreground">
+                        {[...(summary.matrix.get(pid)?.entries() ?? [])]
+                          .sort((a, b) => b[1] - a[1])
+                          .map(([uid, uh]) => `${staffLabel(uid)} – ${fmtHours(uh)}`)
+                          .join(" · ")}
+                      </td>
+                    </tr>
+                  ))}
+                  {summary.projects.length === 0 && (
+                    <tr>
+                      <td className="p-2 text-muted-foreground" colSpan={3}>
+                        לא דווחו שעות לפרויקטים בחודש זה.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </>
+          )}
+        </div>
+      ) : (
       <div className="print-area space-y-6 rounded-xl border border-border bg-card p-6">
         <header className="border-b border-border pb-4">
           <h2 className="text-xl font-bold">
@@ -340,6 +426,7 @@ function ReportPage() {
           <div className="border-t border-border pt-2">אישור מנהל</div>
         </div>
       </div>
+      )}
     </div>
   );
 }
