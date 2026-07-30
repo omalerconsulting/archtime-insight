@@ -2,12 +2,24 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { useServerFn } from "@tanstack/react-start";
+import { UserPlus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminOnly } from "@/components/AdminOnly";
 import { fmtMoney } from "@/lib/time";
+import { createEmployee } from "@/lib/admin-users.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/_authenticated/employees")({
   head: () => ({
@@ -87,11 +99,14 @@ function EmployeesPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">ניהול עובדים והרשאות</h1>
-        <p className="text-sm text-muted-foreground">
-          עובדים נוצרים בהרשמה למערכת. כאן קובעים הרשאות מנהל, תעריף עלות לשעה וסטטוס פעילות.
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">ניהול עובדים והרשאות</h1>
+          <p className="text-sm text-muted-foreground">
+            הוספת משתמשים חדשים, הרשאות מנהל, תעריף עלות לשעה וסטטוס פעילות.
+          </p>
+        </div>
+        <NewUserDialog onCreated={() => qc.invalidateQueries({ queryKey: ["employees"] })} />
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-border bg-card">
