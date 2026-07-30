@@ -497,6 +497,7 @@ function DayEditor({
   onClose: () => void;
 }) {
   const qc = useQueryClient();
+  const { isAdmin } = useAuth();
   const dayQ = useQuery({
     queryKey: ["day", userId, date],
     queryFn: async () => {
@@ -543,6 +544,11 @@ function DayEditor({
   const save = useMutation({
     mutationFn: async () => {
       if (!form || !rows) return;
+      const existing = dayQ.data?.entry as Partial<TimeEntry> | null | undefined;
+      const changed =
+        (normalizeTime(form.clock_in) || null) !== (existing?.clock_in ?? null) ||
+        (normalizeTime(form.clock_out) || null) !== (existing?.clock_out ?? null) ||
+        (Number(form.break_minutes) || 0) !== (existing?.break_minutes ?? 0);
       const payload = {
         user_id: userId,
         work_date: date,
@@ -551,6 +557,7 @@ function DayEditor({
         break_minutes: Number(form.break_minutes) || 0,
         absence_type: form.absence_type === "none" ? null : form.absence_type,
         note: form.note || null,
+        ...(!isAdmin && changed ? manualMeta(existing) : {}),
       };
       const { error: upErr } = await supabase
         .from("time_entries")
