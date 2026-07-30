@@ -133,6 +133,8 @@ function TimesheetPage() {
 
   const range = useMemo(() => monthRange(year, month), [year, month]);
   const userId = user?.id ?? "";
+  const monthLocked = isPeriodLocked(year, month, isAdmin);
+  const lockDeadline = periodLockDate(year, month);
 
   const projectsQ = useQuery({ queryKey: ["projects-dir"], queryFn: fetchProjectDirectory });
   const monthQ = useQuery({
@@ -233,6 +235,7 @@ function TimesheetPage() {
   const manualSave = useMutation({
     mutationFn: async () => {
       if (!manual.date || (!manual.in && !manual.out)) throw new Error("missing");
+      if (isDateLocked(manual.date, isAdmin)) throw new Error("locked");
       const existing = entryByDate.get(manual.date);
       const payload = {
         clock_in: normalizeTime(manual.in) || null,
@@ -254,7 +257,12 @@ function TimesheetPage() {
       toast.success("השעות נשמרו");
       qc.invalidateQueries({ queryKey: ["month"] });
     },
-    onError: () => toast.error("הזנת השעות נכשלה – יש למלא תאריך ולפחות שעת כניסה או יציאה"),
+    onError: (e: Error) =>
+      toast.error(
+        e.message === "locked"
+          ? `תקופת הדיווח נעולה – ניתן היה לעדכן עד ${fmtDate(periodLockDate(Number(manual.date.slice(0, 4)), Number(manual.date.slice(5, 7)) - 1))}. יש לפנות למנהל.`
+          : "הזנת השעות נכשלה – יש למלא תאריך ולפחות שעת כניסה או יציאה",
+      ),
   });
 
   return (
