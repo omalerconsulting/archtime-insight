@@ -3,11 +3,11 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { UserPlus } from "lucide-react";
+import { UserPlus, KeyRound } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminOnly } from "@/components/AdminOnly";
 import { fmtMoney } from "@/lib/time";
-import { createEmployee } from "@/lib/admin-users.functions";
+import { createEmployee, resetEmployeePassword } from "@/lib/admin-users.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -120,6 +120,7 @@ function EmployeesPage() {
               <th scope="col" className="p-3 text-start">שכר שעתי שהוזן ע״י העובד</th>
               <th scope="col" className="p-3 text-start">הרשאת מנהל</th>
               <th scope="col" className="p-3 text-start">פעיל</th>
+              <th scope="col" className="p-3 text-start">סיסמה</th>
             </tr>
           </thead>
           <tbody>
@@ -165,6 +166,9 @@ function EmployeesPage() {
                     aria-label={`סטטוס פעילות עבור ${p.full_name || p.email}`}
                     onCheckedChange={(v) => setActive.mutate({ userId: p.id, active: v })}
                   />
+                </td>
+                <td className="p-3">
+                  <ResetPasswordDialog userId={p.id} name={p.full_name || p.email} />
                 </td>
               </tr>
             ))}
