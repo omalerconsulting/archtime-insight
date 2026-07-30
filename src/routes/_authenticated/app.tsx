@@ -201,8 +201,8 @@ function TimesheetPage() {
       if (!manual.date || (!manual.in && !manual.out)) throw new Error("missing");
       const existing = entryByDate.get(manual.date);
       const payload = {
-        clock_in: manual.in || null,
-        clock_out: manual.out || null,
+        clock_in: normalizeTime(manual.in) || null,
+        clock_out: normalizeTime(manual.out) || null,
         break_minutes: Number(manual.brk) || 0,
       };
       if (existing) {
@@ -274,7 +274,7 @@ function TimesheetPage() {
             {todayEntry?.clock_in ? `כניסה ${trimTime(todayEntry.clock_in)}` : "טרם נרשמה כניסה"}
             {todayEntry?.clock_out ? ` · יציאה ${trimTime(todayEntry.clock_out)}` : ""}
           </p>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button onClick={() => clockMutation.mutate("in")} disabled={clockMutation.isPending}>
               <LogIn className="size-4" />
               כניסה
@@ -287,10 +287,33 @@ function TimesheetPage() {
               <LogOut className="size-4" />
               יציאה
             </Button>
-            <Button variant="secondary" onClick={() => setEditDate(todayIso())}>
-              עריכת היום ופירוק לפרויקטים
+            <Button
+              variant="outline"
+              onClick={() => clockMutation.mutate("break-start")}
+              disabled={clockMutation.isPending || Boolean(breakStart)}
+            >
+              <Coffee className="size-4" />
+              יציאה להפסקה
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => clockMutation.mutate("break-end")}
+              disabled={clockMutation.isPending || !breakStart}
+            >
+              <Play className="size-4" />
+              חזרה מהפסקה
             </Button>
           </div>
+          {breakStart && (
+            <p className="mt-2 text-xs text-muted-foreground">בהפסקה מאז {breakStart}</p>
+          )}
+          <Button
+            size="lg"
+            className="mt-4 w-full text-base font-semibold shadow-md"
+            onClick={() => setEditDate(todayIso())}
+          >
+            עריכת היום ופירוק לפרויקטים
+          </Button>
 
           <div className="mt-5 border-t border-border pt-4">
             <h3 className="mb-3 text-sm font-medium text-muted-foreground">הזנה ידנית של שעות</h3>
@@ -306,20 +329,18 @@ function TimesheetPage() {
               </div>
               <div className="space-y-1">
                 <Label htmlFor="m-in" className="text-xs">כניסה</Label>
-                <Input
+                <TimeField
                   id="m-in"
-                  type="time"
                   value={manual.in}
-                  onChange={(e) => setManual({ ...manual, in: e.target.value })}
+                  onChange={(v) => setManual({ ...manual, in: v })}
                 />
               </div>
               <div className="space-y-1">
                 <Label htmlFor="m-out" className="text-xs">יציאה</Label>
-                <Input
+                <TimeField
                   id="m-out"
-                  type="time"
                   value={manual.out}
-                  onChange={(e) => setManual({ ...manual, out: e.target.value })}
+                  onChange={(v) => setManual({ ...manual, out: v })}
                 />
               </div>
               <div className="space-y-1">
@@ -546,20 +567,18 @@ function DayEditor({
             <div className="grid gap-4 sm:grid-cols-4">
               <div className="space-y-2">
                 <Label htmlFor="ci">שעת כניסה</Label>
-                <Input
+                <TimeField
                   id="ci"
-                  type="time"
                   value={form.clock_in}
-                  onChange={(e) => setForm({ ...form, clock_in: e.target.value })}
+                  onChange={(v) => setForm({ ...form, clock_in: v })}
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="co">שעת יציאה</Label>
-                <Input
+                <TimeField
                   id="co"
-                  type="time"
                   value={form.clock_out}
-                  onChange={(e) => setForm({ ...form, clock_out: e.target.value })}
+                  onChange={(v) => setForm({ ...form, clock_out: v })}
                 />
               </div>
               <div className="space-y-2">
