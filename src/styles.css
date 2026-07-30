@@ -198,6 +198,9 @@ html.a11y-no-motion * {
   .no-print {
     display: none !important;
   }
+  .holiday-row {
+    background: #fdf3c7 !important;
+  }
   .print-area {
     box-shadow: none !important;
     border: none !important;
