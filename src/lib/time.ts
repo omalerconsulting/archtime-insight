@@ -126,6 +126,44 @@ export function fmtHours(n: number) {
   });
 }
 
+/** Progressive 24h mask: typing digits auto-inserts ":" → HH:MM:SS. */
+export function maskTimeInput(value: string): string {
+  const d = (value ?? "").replace(/\D/g, "").slice(0, 6);
+  if (d.length <= 2) return d;
+  if (d.length <= 4) return `${d.slice(0, 2)}:${d.slice(2)}`;
+  return `${d.slice(0, 2)}:${d.slice(2, 4)}:${d.slice(4)}`;
+}
+
+/** Progressive duration mask: digits auto-insert ":" → HH:MM. */
+export function maskDurationInput(value: string): string {
+  const d = (value ?? "").replace(/\D/g, "").slice(0, 4);
+  if (d.length <= 2) return d;
+  return `${d.slice(0, 2)}:${d.slice(2)}`;
+}
+
+/** "H:MM" (or bare hours) → decimal hours. Seconds are ignored. */
+export function durationToHours(value: string): number {
+  const raw = (value ?? "").trim();
+  if (!raw) return 0;
+  const [h, m] = raw.split(":");
+  const hours = Number(h) || 0;
+  const mins = Number((m ?? "").slice(0, 2)) || 0;
+  return Math.round((hours + mins / 60) * 10000) / 10000;
+}
+
+/** Decimal hours → "HH:MM" (rounded to whole minutes, seconds ignored). */
+export function hoursToDuration(n: number): string {
+  const total = Math.round((Number(n) || 0) * 60);
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+/** Compare two hour amounts at whole-minute resolution (seconds never count). */
+export function hoursGap(a: number, b: number): number {
+  return Math.abs(Math.round(a * 60) - Math.round(b * 60)) / 60;
+}
+
 export function fmtMoney(n: number) {
   return n.toLocaleString("he-IL", { style: "currency", currency: "ILS", maximumFractionDigits: 0 });
 }

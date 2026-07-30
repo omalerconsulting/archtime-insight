@@ -11,7 +11,12 @@ import {
   absenceLabel,
   computeHours,
   fmtHours,
+  durationToHours,
+  hoursGap,
+  hoursToDuration,
   iso,
+  maskDurationInput,
+  maskTimeInput,
   monthRange,
   MONTH_NAMES,
   normalizeTime,
@@ -50,6 +55,7 @@ export const Route = createFileRoute("/_authenticated/app")({
   component: TimesheetPage,
 });
 
+/** `hours` is kept as an "HH:MM" duration string in the form. */
 type DayRow = { project_id: string; hours: string; description: string; id?: string };
 
 /** 24h text field, always normalized to HH:MM:SS. */
@@ -72,7 +78,7 @@ function TimeField({
       className="text-center tabular-nums"
       placeholder="HH:MM:SS"
       value={value}
-      onChange={(e) => onChange(e.target.value)}
+      onChange={(e) => onChange(maskTimeInput(e.target.value))}
       onBlur={(e) => onChange(normalizeTime(e.target.value))}
       {...rest}
     />
@@ -422,7 +428,7 @@ function TimesheetPage() {
                 e?.break_minutes ?? 0,
               );
               const proj = hoursByDate.get(d) ?? 0;
-              const mismatch = attendance > 0 && Math.abs(attendance - proj) > 0.5;
+              const mismatch = attendance > 0 && hoursGap(attendance, proj) > 0.5;
               const weekend = ["שישי", "שבת"].includes(weekdayOf(d));
               return (
                 <tr
@@ -442,7 +448,7 @@ function TimesheetPage() {
                   </td>
                   <td className="p-3 font-medium">{attendance ? fmtHours(attendance) : "—"}</td>
                   <td className={`p-3 ${mismatch ? "text-destructive" : ""}`}>
-                    {proj ? fmtHours(proj) : "—"}
+                    {proj ? hoursToDuration(proj) : "—"}
                     {mismatch && (
                       <AlertTriangle className="ms-1 inline size-3.5" aria-label="פער בין נוכחות לשעות פרויקט" />
                     )}
@@ -535,7 +541,7 @@ function DayEditor({
       dayQ.data.hours.map((h) => ({
         id: h.id,
         project_id: h.project_id,
-        hours: String(h.hours),
+        hours: hoursToDuration(Number(h.hours)),
         description: h.description ?? "",
       })),
     );
@@ -571,14 +577,14 @@ function DayEditor({
         .eq("work_date", date);
       if (delErr) throw delErr;
 
-      const valid = rows.filter((r) => r.project_id && Number(r.hours) > 0);
+      const valid = rows.filter((r) => r.project_id && durationToHours(r.hours) > 0);
       if (valid.length) {
         const { error: insErr } = await supabase.from("project_hours").insert(
           valid.map((r) => ({
             user_id: userId,
             work_date: date,
             project_id: r.project_id,
-            hours: Number(r.hours),
+            hours: durationToHours(r.hours),
             description: r.description || null,
           })),
         );
@@ -595,7 +601,7 @@ function DayEditor({
   });
 
   const attendance = form ? computeHours(form.clock_in, form.clock_out, Number(form.break_minutes) || 0) : 0;
-  const projectTotal = (rows ?? []).reduce((s, r) => s + (Number(r.hours) || 0), 0);
+  const projectTotal = (rows ?? []).reduce((s, r) => s + durationToHours(r.hours), 0);
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -708,15 +714,22 @@ function DayEditor({
                       </SelectContent>
                     </Select>
                     <Input
-                      type="number"
-                      step="0.25"
-                      min="0"
-                      aria-label="שעות"
-                      placeholder="שעות"
+                      inputMode="numeric"
+                      dir="ltr"
+                      className="text-center tabular-nums"
+                      aria-label="שעות (HH:MM)"
+                      placeholder="HH:MM"
                       value={row.hours}
                       onChange={(e) => {
                         const next = [...rows];
-                        next[idx] = { ...row, hours: e.target.value };
+                        next[idx] = { ...row, hours: maskDurationInput(e.target.value) };
+                        setRows(next);
+                      }}
+                      onBlur={(e) => {
+                        const v = e.target.value.trim();
+                        if (!v) return;
+                        const next = [...rows];
+                        next[idx] = { ...row, hours: hoursToDuration(durationToHours(v)) };
                         setRows(next);
                       }}
                     />
@@ -744,12 +757,12 @@ function DayEditor({
 
               <p
                 className={`mt-3 text-sm ${
-                  attendance > 0 && Math.abs(attendance - projectTotal) > 0.5
+                  attendance > 0 && hoursGap(attendance, projectTotal) > 0.5
                     ? "text-destructive"
                     : "text-muted-foreground"
                 }`}
               >
-                שעות נוכחות: {fmtHours(attendance)} · שעות פרויקטים: {fmtHours(projectTotal)}
+                שעות נוכחות: {hoursToDuration(attendance)} · שעות פרויקטים: {hoursToDuration(projectTotal)}
               </p>
             </div>
           </div>
