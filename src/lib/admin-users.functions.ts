@@ -49,6 +49,29 @@ const resetSchema = z.object({
   password: z.string().min(8).max(72),
 });
 
+export const deleteEmployee = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => z.object({ user_id: z.string().uuid() }).parse(data))
+  .handler(async ({ data, context }) => {
+    const { data: roles, error: roleErr } = await context.supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", context.userId)
+      .eq("role", "admin");
+    if (roleErr) throw new Error(roleErr.message);
+    if (!roles || roles.length === 0) throw new Error("forbidden");
+    if (data.user_id === context.userId) throw new Error("לא ניתן למחוק את המשתמש שלך");
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await supabaseAdmin.from("project_hours").delete().eq("user_id", data.user_id);
+    await supabaseAdmin.from("time_entries").delete().eq("user_id", data.user_id);
+    await supabaseAdmin.from("user_roles").delete().eq("user_id", data.user_id);
+    await supabaseAdmin.from("profiles").delete().eq("id", data.user_id);
+    const del = await supabaseAdmin.auth.admin.deleteUser(data.user_id);
+    if (del.error) throw new Error(del.error.message);
+    return { ok: true };
+  });
+
 export const resetEmployeePassword = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => resetSchema.parse(data))

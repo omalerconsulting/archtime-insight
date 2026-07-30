@@ -3,11 +3,22 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { UserPlus, KeyRound, Check } from "lucide-react";
+import { UserPlus, KeyRound, Check, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminOnly } from "@/components/AdminOnly";
 import { fmtMoney } from "@/lib/time";
-import { createEmployee, resetEmployeePassword } from "@/lib/admin-users.functions";
+import { createEmployee, resetEmployeePassword, deleteEmployee } from "@/lib/admin-users.functions";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -138,6 +149,7 @@ function EmployeesPage() {
               <th scope="col" className="p-3 text-start">הרשאת מנהל</th>
               <th scope="col" className="p-3 text-start">פעיל</th>
               <th scope="col" className="p-3 text-start">סיסמה</th>
+              <th scope="col" className="p-3 text-start">מחיקה</th>
             </tr>
           </thead>
           <tbody>
@@ -206,6 +218,13 @@ function EmployeesPage() {
                 <td className="p-3">
                   <ResetPasswordDialog userId={p.id} name={p.full_name || p.email} />
                 </td>
+                <td className="p-3">
+                  <DeleteUserButton
+                    userId={p.id}
+                    name={p.full_name || p.email}
+                    onDeleted={() => qc.invalidateQueries({ queryKey: ["employees"] })}
+                  />
+                </td>
               </tr>
             ))}
           </tbody>
@@ -219,6 +238,59 @@ function NewUserDialog({ onCreated }: { onCreated: () => void }) {
 }
 
 function ResetPasswordDialog({ userId, name }: { userId: string; name: string }) {
+  return <ResetPasswordDialogInner userId={userId} name={name} />;
+}
+
+function DeleteUserButton({
+  userId,
+  name,
+  onDeleted,
+}: {
+  userId: string;
+  name: string;
+  onDeleted: () => void;
+}) {
+  const del = useServerFn(deleteEmployee);
+  const mut = useMutation({
+    mutationFn: async () => {
+      await del({ data: { user_id: userId } });
+    },
+    onSuccess: () => {
+      toast.success("המשתמש נמחק מהמערכת");
+      onDeleted();
+    },
+    onError: (e: unknown) =>
+      toast.error(`מחיקת המשתמש נכשלה: ${e instanceof Error ? e.message : "שגיאה"}`),
+  });
+
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button size="sm" variant="destructive" aria-label={`מחיקת המשתמש ${name}`}>
+          <Trash2 className="size-4" />
+          מחיקה
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>מחיקת המשתמש {name}</AlertDialogTitle>
+          <AlertDialogDescription>
+            האם אתה בטוח? לאחר המחיקה, לא ניתן לשחזר את המידע. כל דיווחי השעות של העובד יימחקו
+            לצמיתות.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>לא</AlertDialogCancel>
+          <AlertDialogAction disabled={mut.isPending} onClick={() => mut.mutate()}>
+            כן, מחק
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+function ResetPasswordDialogInner({ userId, name }: { userId: string; name: string }) {
   const [open, setOpen] = useState(false);
   const [pw, setPw] = useState("");
   const reset = useServerFn(resetEmployeePassword);
