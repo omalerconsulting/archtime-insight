@@ -431,9 +431,15 @@ function TimesheetPage() {
                 >
                   <td className="p-3">{d.slice(8)}/{d.slice(5, 7)}</td>
                   <td className="p-3">{weekdayOf(d)}</td>
-                  <td className="p-3">{trimTime(e?.clock_in ?? null) || "—"}</td>
-                  <td className="p-3">{trimTime(e?.clock_out ?? null) || "—"}</td>
-                  <td className="p-3">{e?.break_minutes ?? 0}</td>
+                  <td className={`p-3 ${e?.manually_edited ? "font-semibold text-destructive" : ""}`}>
+                    {trimTime(e?.clock_in ?? null) || "—"}
+                  </td>
+                  <td className={`p-3 ${e?.manually_edited ? "font-semibold text-destructive" : ""}`}>
+                    {trimTime(e?.clock_out ?? null) || "—"}
+                  </td>
+                  <td className={`p-3 ${e?.manually_edited ? "font-semibold text-destructive" : ""}`}>
+                    {e?.break_minutes ?? 0}
+                  </td>
                   <td className="p-3 font-medium">{attendance ? fmtHours(attendance) : "—"}</td>
                   <td className={`p-3 ${mismatch ? "text-destructive" : ""}`}>
                     {proj ? fmtHours(proj) : "—"}
@@ -446,6 +452,9 @@ function TimesheetPage() {
                     <Button size="sm" variant="ghost" onClick={() => setEditDate(d)}>
                       עריכה
                     </Button>
+                    {e?.manually_edited && (
+                      <span className="ms-1 text-xs text-destructive">עודכן ידנית</span>
+                    )}
                   </td>
                 </tr>
               );
