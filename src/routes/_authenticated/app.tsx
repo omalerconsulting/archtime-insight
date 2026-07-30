@@ -509,8 +509,8 @@ function DayEditor({
       const payload = {
         user_id: userId,
         work_date: date,
-        clock_in: form.clock_in || null,
-        clock_out: form.clock_out || null,
+        clock_in: normalizeTime(form.clock_in) || null,
+        clock_out: normalizeTime(form.clock_out) || null,
         break_minutes: Number(form.break_minutes) || 0,
         absence_type: form.absence_type === "none" ? null : form.absence_type,
         note: form.note || null,
