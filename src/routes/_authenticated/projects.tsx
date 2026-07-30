@@ -234,6 +234,14 @@ function ProjectDialog({ project, onSaved }: { project?: ProjectRow; onSaved: ()
     status: project?.status ?? "active",
     notes: project?.notes ?? "",
   });
+  const [stations, setStations] = useState<MilestoneDraft[]>([]);
+  const fee = Number(form.fee_total) || 0;
+  const stationsTotal = stations.reduce(
+    (s, m) => s + milestoneAmount(m.amount_type, Number(m.amount_value) || 0, fee),
+    0,
+  );
+  const stationsValid =
+    stations.length === 0 || (fee > 0 && Math.abs(stationsTotal - fee) < 1);
 
   const save = useMutation({
     mutationFn: async () => {
@@ -248,12 +256,15 @@ function ProjectDialog({ project, onSaved }: { project?: ProjectRow; onSaved: ()
         notes: form.notes || null,
       };
       if (!payload.code || !payload.name) throw new Error("missing");
+      if (!stationsValid) throw new Error("stations");
       if (project) {
         const { error } = await supabase.from("projects").update(payload).eq("id", project.id);
         if (error) throw error;
+        await saveStations(project.id);
       } else {
-        const { error } = await supabase.from("projects").insert(payload);
+        const { data, error } = await supabase.from("projects").insert(payload).select("id").single();
         if (error) throw error;
+        if (data) await saveStations(data.id);
       }
     },
     onSuccess: () => {
@@ -261,8 +272,29 @@ function ProjectDialog({ project, onSaved }: { project?: ProjectRow; onSaved: ()
       setOpen(false);
       onSaved();
     },
-    onError: () => toast.error("שמירה נכשלה – ודא שקוד הפרויקט ייחודי ושכל השדות מולאו"),
+    onError: (e: unknown) =>
+      toast.error(
+        e instanceof Error && e.message === "stations"
+          ? "סכום תחנות התשלום חייב להיות שווה בדיוק לשכר הטרחה (100%)"
+          : "שמירה נכשלה – ודא שקוד הפרויקט ייחודי ושכל השדות מולאו",
+      ),
   });
+
+  async function saveStations(projectId: string) {
+    const valid = stations.filter((s) => s.title.trim());
+    if (valid.length === 0) return;
+    const { error } = await supabase.from("project_milestones").insert(
+      valid.map((s, i) => ({
+        project_id: projectId,
+        title: s.title.trim(),
+        amount_type: s.amount_type,
+        amount_value: Number(s.amount_value) || 0,
+        due_date: s.due_date || null,
+        sort_order: i,
+      })),
+    );
+    if (error) throw error;
+  }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -337,9 +369,11 @@ function ProjectDialog({ project, onSaved }: { project?: ProjectRow; onSaved: ()
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="active">פעיל</SelectItem>
-                <SelectItem value="on_hold">בהמתנה</SelectItem>
-                <SelectItem value="closed">סגור</SelectItem>
+                {PROJECT_STATUSES.map((s) => (
+                  <SelectItem key={s.value} value={s.value}>
+                    {s.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </Field>
@@ -353,12 +387,105 @@ function ProjectDialog({ project, onSaved }: { project?: ProjectRow; onSaved: ()
               />
             </Field>
           </div>
+
+          <div className="space-y-3 rounded-lg border border-border p-4 sm:col-span-2">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold">תחנות תשלום</h3>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  setStations([
+                    ...stations,
+                    { title: "", amount_type: "percent", amount_value: "", due_date: "" },
+                  ])
+                }
+              >
+                <Plus className="size-4" />
+                הוספת תחנה
+              </Button>
+            </div>
+            {stations.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                {project
+                  ? "תחנות קיימות נערכות בטבלה שמתחת לרשימת הפרויקטים. כאן ניתן להוסיף תחנות חדשות."
+                  : "ניתן להגדיר תחנות באחוזים או בסכום, עם תאריך צפי לתשלום. הסכום הכולל חייב להשלים ל‑100%."}
+              </p>
+            )}
+            {stations.map((s, idx) => (
+              <div key={idx} className="grid gap-2 sm:grid-cols-[2fr_1fr_1fr_1.2fr_auto]">
+                <Input
+                  aria-label="שלב בפרויקט"
+                  placeholder="שלב (למשל: חתימת חוזה)"
+                  value={s.title}
+                  onChange={(e) => {
+                    const n = [...stations];
+                    n[idx] = { ...s, title: e.target.value };
+                    setStations(n);
+                  }}
+                />
+                <Select
+                  value={s.amount_type}
+                  onValueChange={(v) => {
+                    const n = [...stations];
+                    n[idx] = { ...s, amount_type: v };
+                    setStations(n);
+                  }}
+                >
+                  <SelectTrigger aria-label="סוג חישוב">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="percent">אחוז</SelectItem>
+                    <SelectItem value="fixed">סכום</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input
+                  type="number"
+                  min="0"
+                  aria-label="ערך התחנה"
+                  placeholder={s.amount_type === "percent" ? "30" : "₪"}
+                  value={s.amount_value}
+                  onChange={(e) => {
+                    const n = [...stations];
+                    n[idx] = { ...s, amount_value: e.target.value };
+                    setStations(n);
+                  }}
+                />
+                <Input
+                  type="date"
+                  aria-label="תאריך צפי לתשלום"
+                  value={s.due_date}
+                  onChange={(e) => {
+                    const n = [...stations];
+                    n[idx] = { ...s, due_date: e.target.value };
+                    setStations(n);
+                  }}
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="מחיקת תחנה"
+                  onClick={() => setStations(stations.filter((_, i) => i !== idx))}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </div>
+            ))}
+            {stations.length > 0 && (
+              <p className={`text-sm ${stationsValid ? "text-muted-foreground" : "text-destructive font-medium"}`}>
+                סך התחנות: {fmtMoney(stationsTotal)} מתוך שכר טרחה {fmtMoney(fee)}
+                {fee > 0 && ` · ${((stationsTotal / fee) * 100).toFixed(1)}%`}
+                {!stationsValid && " – חובה להשלים בדיוק ל‑100% משכר הטרחה"}
+              </p>
+            )}
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>
             ביטול
           </Button>
-          <Button onClick={() => save.mutate()} disabled={save.isPending}>
+          <Button onClick={() => save.mutate()} disabled={save.isPending || !stationsValid}>
             שמירה
           </Button>
         </DialogFooter>
