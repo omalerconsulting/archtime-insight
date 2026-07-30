@@ -174,3 +174,83 @@ function EmployeesPage() {
     </div>
   );
 }
+function NewUserDialog({ onCreated }: { onCreated: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({ full_name: "", email: "", password: "", is_admin: false });
+  const create = useServerFn(createEmployee);
+
+  const mut = useMutation({
+    mutationFn: async () => {
+      if (!form.email.trim() || form.password.length < 8) throw new Error("שדות חסרים");
+      await create({ data: { ...form, email: form.email.trim(), full_name: form.full_name.trim() } });
+    },
+    onSuccess: () => {
+      toast.success("המשתמש נוצר בהצלחה");
+      setForm({ full_name: "", email: "", password: "", is_admin: false });
+      setOpen(false);
+      onCreated();
+    },
+    onError: (e: unknown) =>
+      toast.error(`יצירת המשתמש נכשלה: ${e instanceof Error ? e.message : "שגיאה"}`),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button>
+          <UserPlus className="size-4" />
+          הוספת משתמש
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>הוספת משתמש חדש</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="nu-name">שם מלא</Label>
+            <Input
+              id="nu-name"
+              value={form.full_name}
+              onChange={(e) => setForm({ ...form, full_name: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="nu-email">דוא״ל</Label>
+            <Input
+              id="nu-email"
+              type="email"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="nu-pass">סיסמה ראשונית (8 תווים לפחות)</Label>
+            <Input
+              id="nu-pass"
+              type="text"
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+            />
+          </div>
+          <div className="flex items-center gap-3">
+            <Switch
+              id="nu-admin"
+              checked={form.is_admin}
+              onCheckedChange={(v) => setForm({ ...form, is_admin: v })}
+            />
+            <Label htmlFor="nu-admin">הרשאת מנהל</Label>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>
+            ביטול
+          </Button>
+          <Button onClick={() => mut.mutate()} disabled={mut.isPending}>
+            יצירת משתמש
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
