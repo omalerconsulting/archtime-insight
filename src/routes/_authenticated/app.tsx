@@ -758,7 +758,11 @@ function DayEditor({
                   </p>
                 )}
                 {rows.map((row, idx) => (
-                  <div key={idx} className="grid gap-2 sm:grid-cols-[2fr_1fr_2fr_auto]">
+                  <fieldset
+                    key={idx}
+                    disabled={locked}
+                    className="grid gap-2 sm:grid-cols-[2fr_1fr_2fr_auto]"
+                  >
                     <ProjectPicker
                       projects={projects}
                       value={row.project_id}
@@ -806,7 +810,7 @@ function DayEditor({
                     >
                       <Trash2 className="size-4" />
                     </Button>
-                  </div>
+                  </fieldset>
                 ))}
               </div>
 
@@ -825,12 +829,14 @@ function DayEditor({
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
-            ביטול
+            {locked ? "סגירה" : "ביטול"}
           </Button>
+          {!locked && (
           <Button onClick={() => save.mutate()} disabled={save.isPending}>
             <Save className="size-4" />
             שמירה
           </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
