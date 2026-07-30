@@ -314,6 +314,20 @@ function TimesheetPage() {
       </div>
 
       <section className="grid gap-4 md:grid-cols-4">
+        {monthLocked && (
+          <div
+            role="status"
+            className="rounded-xl border-2 border-destructive/50 bg-destructive/10 p-4 md:col-span-4"
+          >
+            <p className="text-base font-semibold text-destructive">
+              תקופת הדיווח של {MONTH_NAMES[month]} {year} נעולה לשינויים.
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              ניתן היה לעדכן עד {fmtDate(lockDeadline)} ({REPORT_LOCK_DAYS} ימים מתחילת החודש
+              העוקב). לתיקון בדיעבד יש לפנות למנהל.
+            </p>
+          </div>
+        )}
         <div className="rounded-xl border border-border bg-card p-5 md:col-span-2">
           <h2 className="mb-1 text-sm font-medium text-muted-foreground">שעון נוכחות – היום</h2>
           <p className="mb-4 text-lg font-semibold">
