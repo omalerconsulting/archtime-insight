@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { CalendarClock } from "lucide-react";
-import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
 
 /** true during the final two calendar days of the month (e.g. 30-31 in July). */
@@ -20,9 +19,6 @@ export function MonthEndNotice() {
   useEffect(() => {
     const active = Boolean(user) && !isAdmin && !loading && isMonthEndWindow();
     setShow(active);
-    if (active) {
-      toast.warning(MONTH_END_MESSAGE, { id: "month-end-reminder", duration: 8000 });
-    }
   }, [user, isAdmin, loading]);
 
   if (!show) return null;

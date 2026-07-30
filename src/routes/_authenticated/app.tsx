@@ -11,10 +11,13 @@ import {
   ABSENCE_TYPES,
   absenceLabel,
   computeHours,
+  fmtDate,
   fmtHours,
   durationToHours,
   hoursGap,
   hoursToDuration,
+  isDateLocked,
+  isPeriodLocked,
   iso,
   maskDurationInput,
   maskTimeInput,
@@ -22,6 +25,8 @@ import {
   MONTH_NAMES,
   normalizeTime,
   nowTime,
+  periodLockDate,
+  REPORT_LOCK_DAYS,
   todayIso,
   weekdayOf,
   yearOptions,
@@ -133,6 +138,8 @@ function TimesheetPage() {
 
   const range = useMemo(() => monthRange(year, month), [year, month]);
   const userId = user?.id ?? "";
+  const monthLocked = isPeriodLocked(year, month, isAdmin);
+  const lockDeadline = periodLockDate(year, month);
 
   const projectsQ = useQuery({ queryKey: ["projects-dir"], queryFn: fetchProjectDirectory });
   const monthQ = useQuery({
@@ -233,6 +240,7 @@ function TimesheetPage() {
   const manualSave = useMutation({
     mutationFn: async () => {
       if (!manual.date || (!manual.in && !manual.out)) throw new Error("missing");
+      if (isDateLocked(manual.date, isAdmin)) throw new Error("locked");
       const existing = entryByDate.get(manual.date);
       const payload = {
         clock_in: normalizeTime(manual.in) || null,
@@ -254,7 +262,12 @@ function TimesheetPage() {
       toast.success("השעות נשמרו");
       qc.invalidateQueries({ queryKey: ["month"] });
     },
-    onError: () => toast.error("הזנת השעות נכשלה – יש למלא תאריך ולפחות שעת כניסה או יציאה"),
+    onError: (e: Error) =>
+      toast.error(
+        e.message === "locked"
+          ? `תקופת הדיווח נעולה – ניתן היה לעדכן עד ${fmtDate(periodLockDate(Number(manual.date.slice(0, 4)), Number(manual.date.slice(5, 7)) - 1))}. יש לפנות למנהל.`
+          : "הזנת השעות נכשלה – יש למלא תאריך ולפחות שעת כניסה או יציאה",
+      ),
   });
 
   return (
@@ -301,6 +314,20 @@ function TimesheetPage() {
       </div>
 
       <section className="grid gap-4 md:grid-cols-4">
+        {monthLocked && (
+          <div
+            role="status"
+            className="rounded-xl border-2 border-destructive/50 bg-destructive/10 p-4 md:col-span-4"
+          >
+            <p className="text-base font-semibold text-destructive">
+              תקופת הדיווח של {MONTH_NAMES[month]} {year} נעולה לשינויים.
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              ניתן היה לעדכן עד {fmtDate(lockDeadline)} ({REPORT_LOCK_DAYS} ימים מתחילת החודש
+              העוקב). לתיקון בדיעבד יש לפנות למנהל.
+            </p>
+          </div>
+        )}
         <div className="rounded-xl border border-border bg-card p-5 md:col-span-2">
           <h2 className="mb-1 text-sm font-medium text-muted-foreground">שעון נוכחות – היום</h2>
           <p className="mb-4 text-lg font-semibold">
@@ -389,7 +416,11 @@ function TimesheetPage() {
                 />
               </div>
               <div className="flex items-end">
-                <Button variant="secondary" onClick={() => manualSave.mutate()} disabled={manualSave.isPending}>
+                <Button
+                  variant="secondary"
+                  onClick={() => manualSave.mutate()}
+                  disabled={manualSave.isPending || isDateLocked(manual.date, isAdmin)}
+                >
                   שמירה ידנית
                 </Button>
               </div>
@@ -471,7 +502,7 @@ function TimesheetPage() {
                   </td>
                   <td className="p-3">
                     <Button size="sm" variant="ghost" onClick={() => setEditDate(d)}>
-                      עריכה
+                      {monthLocked ? "צפייה" : "עריכה"}
                     </Button>
                     {e?.manually_edited && (
                       <span className="ms-1 text-xs text-destructive">עודכן ידנית</span>
@@ -489,6 +520,7 @@ function TimesheetPage() {
           date={editDate}
           userId={userId}
           projects={projectsQ.data ?? []}
+          locked={isDateLocked(editDate, isAdmin)}
           onClose={() => setEditDate(null)}
         />
       )}
@@ -510,11 +542,13 @@ function DayEditor({
   date,
   userId,
   projects,
+  locked,
   onClose,
 }: {
   date: string;
   userId: string;
   projects: Array<{ id: string; code: string; name: string }>;
+  locked?: boolean;
   onClose: () => void;
 }) {
   const qc = useQueryClient();
@@ -565,6 +599,7 @@ function DayEditor({
   const save = useMutation({
     mutationFn: async () => {
       if (!form || !rows) return;
+      if (locked) throw new Error("locked");
       const existing = dayQ.data?.entry as Partial<TimeEntry> | null | undefined;
       const changed =
         (normalizeTime(form.clock_in) || null) !== (existing?.clock_in ?? null) ||
@@ -612,7 +647,12 @@ function DayEditor({
       qc.invalidateQueries({ queryKey: ["day"] });
       onClose();
     },
-    onError: () => toast.error("שמירת הדיווח נכשלה"),
+    onError: (e: Error) =>
+      toast.error(
+        e.message === "locked"
+          ? "תקופת הדיווח נעולה לשינויים – יש לפנות למנהל"
+          : "שמירת הדיווח נכשלה",
+      ),
   });
 
   const attendance = form ? computeHours(form.clock_in, form.clock_out, Number(form.break_minutes) || 0) : 0;
@@ -629,7 +669,13 @@ function DayEditor({
 
         {form && rows && (
           <div className="space-y-6">
+            {locked && (
+              <p className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm font-medium text-destructive">
+                תקופת הדיווח נעולה – ניתן לצפות בלבד. לעדכון בדיעבד יש לפנות למנהל.
+              </p>
+            )}
             <div className="grid gap-4 sm:grid-cols-4">
+              <fieldset disabled={locked} className="contents">
               <div className="space-y-2">
                 <Label htmlFor="ci">שעת כניסה</Label>
                 <TimeField
@@ -661,6 +707,7 @@ function DayEditor({
                 <Select
                   value={form.absence_type}
                   onValueChange={(v) => setForm({ ...form, absence_type: v })}
+                  disabled={locked}
                 >
                   <SelectTrigger id="ab">
                     <SelectValue />
@@ -675,6 +722,7 @@ function DayEditor({
                   </SelectContent>
                 </Select>
               </div>
+              </fieldset>
             </div>
 
             <div className="space-y-2">
@@ -682,6 +730,7 @@ function DayEditor({
               <Textarea
                 id="note"
                 rows={2}
+                disabled={locked}
                 value={form.note}
                 onChange={(e) => setForm({ ...form, note: e.target.value })}
               />
@@ -693,6 +742,7 @@ function DayEditor({
                 <Button
                   size="sm"
                   variant="outline"
+                  disabled={locked}
                   onClick={() =>
                     setRows([...rows, { project_id: "", hours: "", description: "" }])
                   }
@@ -708,7 +758,11 @@ function DayEditor({
                   </p>
                 )}
                 {rows.map((row, idx) => (
-                  <div key={idx} className="grid gap-2 sm:grid-cols-[2fr_1fr_2fr_auto]">
+                  <fieldset
+                    key={idx}
+                    disabled={locked}
+                    className="grid gap-2 sm:grid-cols-[2fr_1fr_2fr_auto]"
+                  >
                     <ProjectPicker
                       projects={projects}
                       value={row.project_id}
@@ -756,7 +810,7 @@ function DayEditor({
                     >
                       <Trash2 className="size-4" />
                     </Button>
-                  </div>
+                  </fieldset>
                 ))}
               </div>
 
@@ -775,12 +829,14 @@ function DayEditor({
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
-            ביטול
+            {locked ? "סגירה" : "ביטול"}
           </Button>
+          {!locked && (
           <Button onClick={() => save.mutate()} disabled={save.isPending}>
             <Save className="size-4" />
             שמירה
           </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -326,6 +326,7 @@ export type Database = {
           status: string
         }[]
       }
+      period_open: { Args: { _work_date: string }; Returns: boolean }
     }
     Enums: {
       app_role: "admin" | "employee"

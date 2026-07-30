@@ -91,6 +91,27 @@ export function iso(d: Date) {
   return d.toISOString().slice(0, 10);
 }
 
+/** מספר הימים מתחילת החודש העוקב שבהם עדיין ניתן לעדכן את תקופת הדיווח. */
+export const REPORT_LOCK_DAYS = 5;
+
+/** התאריך האחרון (כולל) שבו עובד רגיל יכול עדיין לעדכן את חודש הדיווח. */
+export function periodLockDate(year: number, month: number) {
+  return iso(new Date(Date.UTC(year, month + 1, REPORT_LOCK_DAYS)));
+}
+
+/** האם תקופת הדיווח (שנה/חודש) נעולה לעובד רגיל. מנהל תמיד יכול לערוך. */
+export function isPeriodLocked(year: number, month: number, isAdmin = false, today = todayIso()) {
+  if (isAdmin) return false;
+  return today > periodLockDate(year, month);
+}
+
+/** האם תאריך מסוים (YYYY-MM-DD) נמצא בתקופה נעולה. */
+export function isDateLocked(dateIso: string, isAdmin = false) {
+  if (!dateIso) return false;
+  const [y, m] = dateIso.split("-").map(Number);
+  return isPeriodLocked(y, m - 1, isAdmin);
+}
+
 export function todayIso() {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
