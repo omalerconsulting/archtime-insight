@@ -63,10 +63,13 @@ export const deleteEmployee = createServerFn({ method: "POST" })
     if (data.user_id === context.userId) throw new Error("לא ניתן למחוק את המשתמש שלך");
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    await supabaseAdmin.from("project_hours").delete().eq("user_id", data.user_id);
-    await supabaseAdmin.from("time_entries").delete().eq("user_id", data.user_id);
+    // היסטוריית העובד (דיווחי שעות ושעות בפרויקטים) נשמרת במלואה.
+    // מוסרים רק את אפשרות ההתחברות וההרשאות.
     await supabaseAdmin.from("user_roles").delete().eq("user_id", data.user_id);
-    await supabaseAdmin.from("profiles").delete().eq("id", data.user_id);
+    await supabaseAdmin
+      .from("profiles")
+      .update({ is_active: false, is_approved: false })
+      .eq("id", data.user_id);
     const del = await supabaseAdmin.auth.admin.deleteUser(data.user_id);
     if (del.error) throw new Error(del.error.message);
     return { ok: true };
