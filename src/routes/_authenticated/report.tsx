@@ -72,6 +72,8 @@ function ReportPage() {
     return p ? `${p.code} · ${p.name}` : "פרויקט";
   };
 
+  const projectCode = (id: string) => projectsQ.data?.find((x) => x.id === id)?.code ?? "—";
+
   const days = useMemo(
     () => Array.from({ length: range.days }, (_, i) => iso(new Date(Date.UTC(year, month, i + 1)))),
     [range.days, year, month],
@@ -203,7 +205,7 @@ function ReportPage() {
               <th scope="col" className="p-2 text-start">הפסקה</th>
               <th scope="col" className="p-2 text-start">שעות</th>
               <th scope="col" className="p-2 text-start">היעדרות</th>
-              <th scope="col" className="p-2 text-start">פרויקטים</th>
+              <th scope="col" className="p-2 text-start">מס׳ פרויקט</th>
             </tr>
           </thead>
           <tbody>
@@ -217,9 +219,7 @@ function ReportPage() {
                 <td className="p-2">{r.attendance ? fmtHours(r.attendance) : "—"}</td>
                 <td className="p-2">{absenceLabel(r.entry?.absence_type) || "—"}</td>
                 <td className="p-2">
-                  {r.hrs.length
-                    ? r.hrs.map((h) => `${projectName(h.project_id)} (${fmtHours(Number(h.hours))})`).join(", ")
-                    : "—"}
+                  {r.hrs.length ? r.hrs.map((h) => projectCode(h.project_id)).join(", ") : "—"}
                 </td>
               </tr>
             ))}
