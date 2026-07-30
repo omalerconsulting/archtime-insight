@@ -238,6 +238,59 @@ function NewUserDialog({ onCreated }: { onCreated: () => void }) {
 }
 
 function ResetPasswordDialog({ userId, name }: { userId: string; name: string }) {
+  return <ResetPasswordDialogInner userId={userId} name={name} />;
+}
+
+function DeleteUserButton({
+  userId,
+  name,
+  onDeleted,
+}: {
+  userId: string;
+  name: string;
+  onDeleted: () => void;
+}) {
+  const del = useServerFn(deleteEmployee);
+  const mut = useMutation({
+    mutationFn: async () => {
+      await del({ data: { user_id: userId } });
+    },
+    onSuccess: () => {
+      toast.success("המשתמש נמחק מהמערכת");
+      onDeleted();
+    },
+    onError: (e: unknown) =>
+      toast.error(`מחיקת המשתמש נכשלה: ${e instanceof Error ? e.message : "שגיאה"}`),
+  });
+
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button size="sm" variant="destructive" aria-label={`מחיקת המשתמש ${name}`}>
+          <Trash2 className="size-4" />
+          מחיקה
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>מחיקת המשתמש {name}</AlertDialogTitle>
+          <AlertDialogDescription>
+            האם אתה בטוח? לאחר המחיקה, לא ניתן לשחזר את המידע. כל דיווחי השעות של העובד יימחקו
+            לצמיתות.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>לא</AlertDialogCancel>
+          <AlertDialogAction disabled={mut.isPending} onClick={() => mut.mutate()}>
+            כן, מחק
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+function ResetPasswordDialogInner({ userId, name }: { userId: string; name: string }) {
   const [open, setOpen] = useState(false);
   const [pw, setPw] = useState("");
   const reset = useServerFn(resetEmployeePassword);
