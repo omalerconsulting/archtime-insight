@@ -304,9 +304,11 @@ function TimesheetPage() {
               חזרה מהפסקה
             </Button>
           </div>
-          {breakStart && (
-            <p className="mt-2 text-xs text-muted-foreground">בהפסקה מאז {breakStart}</p>
-          )}
+          <p className="mt-2 text-xs text-muted-foreground">
+            {breakStart
+              ? `בהפסקה מאז ${breakStart} · סה"כ הפסקות היום: ${todayEntry?.break_minutes ?? 0} דק'`
+              : `סה"כ הפסקות היום: ${todayEntry?.break_minutes ?? 0} דק'`}
+          </p>
           <Button
             size="lg"
             className="mt-4 w-full text-base font-semibold shadow-md"
