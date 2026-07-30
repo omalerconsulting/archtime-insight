@@ -423,7 +423,7 @@ function ProjectDialog({ project, onSaved }: { project?: ProjectRow; onSaved: ()
               const rowAmount = milestoneAmount(s.amount_type, Number(s.amount_value) || 0, fee);
               const rowPercent = fee > 0 ? (rowAmount / fee) * 100 : 0;
               return (
-              <div key={idx} className="grid gap-2 sm:grid-cols-[minmax(0,2fr)_7rem_minmax(9rem,1fr)_minmax(0,1.2fr)_auto] sm:items-center">
+              <div key={idx} className="grid gap-2 sm:grid-cols-[minmax(0,2fr)_7rem_auto_minmax(0,1.2fr)_auto] sm:items-center">
                 <Input
                   aria-label="שלב בפרויקט"
                   placeholder="שלב (למשל: חתימת חוזה)"
@@ -451,17 +451,17 @@ function ProjectDialog({ project, onSaved }: { project?: ProjectRow; onSaved: ()
                   </SelectContent>
                 </Select>
                 <Input
-                  type="number"
-                  min="0"
-                  step="any"
+                  type="text"
                   inputMode="decimal"
-                  className="w-full min-w-[9rem] text-start font-mono tabular-nums"
+                  className="text-start font-mono tabular-nums"
+                  style={{ width: `${Math.max(7, s.amount_value.length + 5)}ch` }}
                   aria-label="ערך התחנה"
                   placeholder={s.amount_type === "percent" ? "30" : "100000"}
                   value={s.amount_value}
                   onChange={(e) => {
+                    const v = e.target.value.replace(/[^\d.]/g, "").slice(0, 9);
                     const n = [...stations];
-                    n[idx] = { ...s, amount_value: e.target.value.slice(0, 9) };
+                    n[idx] = { ...s, amount_value: v };
                     setStations(n);
                   }}
                 />
@@ -657,7 +657,7 @@ function MilestonesPanel({
         </tbody>
       </table>
 
-      <div className="mt-4 grid gap-2 sm:grid-cols-[minmax(0,2fr)_7rem_minmax(9rem,1fr)_minmax(0,1fr)_auto]">
+      <div className="mt-4 grid gap-2 sm:grid-cols-[minmax(0,2fr)_7rem_auto_minmax(0,1fr)_auto]">
         <Input
           aria-label="שם השלב"
           placeholder="לדוגמה: חתימה על חוזה"
@@ -674,14 +674,16 @@ function MilestonesPanel({
           </SelectContent>
         </Select>
         <Input
-          type="number"
-          step="any"
+          type="text"
           inputMode="decimal"
-          className="min-w-[9rem] font-mono tabular-nums"
+          className="font-mono tabular-nums"
+          style={{ width: `${Math.max(7, draft.amount_value.length + 5)}ch` }}
           aria-label="ערך"
           placeholder={draft.amount_type === "percent" ? "30" : "100000"}
           value={draft.amount_value}
-          onChange={(e) => setDraft({ ...draft, amount_value: e.target.value.slice(0, 9) })}
+          onChange={(e) =>
+            setDraft({ ...draft, amount_value: e.target.value.replace(/[^\d.]/g, "").slice(0, 9) })
+          }
         />
         <Input
           type="date"
