@@ -14,6 +14,7 @@ import {
   monthRange,
   splitOvertime,
   weekdayOf,
+  yearOptions,
 } from "@/lib/time";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -224,8 +225,8 @@ function ReportPage() {
               <SelectTrigger id="y" className="w-28">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
-                {[now.getFullYear() - 2, now.getFullYear() - 1, now.getFullYear()].map((y) => (
+              <SelectContent className="max-h-72">
+                {yearOptions().map((y) => (
                   <SelectItem key={y} value={String(y)}>
                     {y}
                   </SelectItem>

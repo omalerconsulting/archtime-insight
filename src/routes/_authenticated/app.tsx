@@ -23,6 +23,7 @@ import {
   nowTime,
   todayIso,
   weekdayOf,
+  yearOptions,
 } from "@/lib/time";
 import { Button } from "@/components/ui/button";
 import { ProjectPicker } from "@/components/ProjectPicker";
@@ -286,14 +287,12 @@ function TimesheetPage() {
               <SelectTrigger id="year" className="w-28">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
-                {[now.getFullYear() - 2, now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1].map(
-                  (y) => (
-                    <SelectItem key={y} value={String(y)}>
-                      {y}
-                    </SelectItem>
-                  ),
-                )}
+              <SelectContent className="max-h-72">
+                {yearOptions().map((y) => (
+                  <SelectItem key={y} value={String(y)}>
+                    {y}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
