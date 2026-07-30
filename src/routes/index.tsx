@@ -93,7 +93,7 @@ function Index() {
                 <Link to="/auth">כניסה עם שם משתמש וסיסמה</Link>
               </Button>
               <Button asChild size="lg" variant="outline" className="hover-scale">
-                <Link to="/help">הוראות הפעלה</Link>
+                <Link to="/guide">הוראות הפעלה</Link>
               </Button>
             </div>
           </section>
