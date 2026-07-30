@@ -1,9 +1,9 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { Building2, Clock, FileText, ShieldCheck } from "lucide-react";
+import { Clock, FileText, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
-import officeLogo from "@/assets/office-logo.png";
+import officeLogo from "@/assets/simeone-logo.png.asset.json";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -67,21 +67,20 @@ function Index() {
 
       <div className="relative">
         <header className="border-b border-border/60 backdrop-blur-sm">
-          <div className="mx-auto grid max-w-6xl grid-cols-[1fr_auto_1fr] items-center gap-4 px-6 py-4">
-            <div className="flex items-center gap-2 justify-self-start">
-              <Building2 className="size-6 text-accent" aria-hidden />
+          <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-4">
+            <div className="flex items-center gap-3">
+              <img
+                src={officeLogo.url}
+                alt="לוגו סימאונה אדריכלים"
+                width={320}
+                height={320}
+                className="size-11 rounded-lg bg-foreground/95 object-contain p-1 shadow-sm transition-transform duration-300 hover:scale-105 md:size-12"
+              />
               <span className="text-base font-semibold md:text-lg">
                 מערכת ניהול שעות ופרויקטים
               </span>
             </div>
-            <img
-              src={officeLogo}
-              alt="לוגו סימאונה אדריכלים"
-              width={816}
-              height={816}
-              className="h-10 w-auto justify-self-center opacity-90 transition-opacity duration-300 hover:opacity-100 md:h-12"
-            />
-            <Button asChild className="justify-self-end">
+            <Button asChild>
               <Link to="/auth">כניסה למערכת</Link>
             </Button>
           </div>
