@@ -250,6 +250,7 @@ function ProjectsPage() {
                     <div className="flex gap-1">
                       <ProjectDialog
                         project={p}
+                        projectMilestones={ms}
                         onSaved={() => qc.invalidateQueries({ queryKey: ["projects-full"] })}
                       />
                       <Button
