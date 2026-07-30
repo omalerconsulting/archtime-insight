@@ -81,6 +81,31 @@ function TimeField({
 
 const breakKey = (userId: string, date: string) => `break-start:${userId}:${date}`;
 
+type ManualMeta = {
+  manually_edited: boolean;
+  manual_edited_at: string;
+  original_clock_in: string | null;
+  original_clock_out: string | null;
+  original_break_minutes: number | null;
+};
+
+/** Snapshot of the pre-edit values, kept only for the first manual change. */
+function manualMeta(existing: Partial<TimeEntry> | null | undefined): ManualMeta {
+  return {
+    manually_edited: true,
+    manual_edited_at: new Date().toISOString(),
+    original_clock_in: existing?.manually_edited
+      ? (existing.original_clock_in ?? null)
+      : (existing?.clock_in ?? null),
+    original_clock_out: existing?.manually_edited
+      ? (existing.original_clock_out ?? null)
+      : (existing?.clock_out ?? null),
+    original_break_minutes: existing?.manually_edited
+      ? (existing.original_break_minutes ?? null)
+      : (existing?.break_minutes ?? null),
+  };
+}
+
 function minutesBetween(from: string, to: string) {
   const [h1, m1, s1 = 0] = from.split(":").map(Number);
   const [h2, m2, s2 = 0] = to.split(":").map(Number);
@@ -90,7 +115,7 @@ function minutesBetween(from: string, to: string) {
 }
 
 function TimesheetPage() {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const qc = useQueryClient();
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
@@ -204,6 +229,7 @@ function TimesheetPage() {
         clock_in: normalizeTime(manual.in) || null,
         clock_out: normalizeTime(manual.out) || null,
         break_minutes: Number(manual.brk) || 0,
+        ...(isAdmin ? {} : manualMeta(existing)),
       };
       if (existing) {
         const { error } = await supabase.from("time_entries").update(payload).eq("id", existing.id);
