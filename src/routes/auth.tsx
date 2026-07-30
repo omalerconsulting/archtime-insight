@@ -9,6 +9,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export const Route = createFileRoute("/auth")({
+  validateSearch: (s: Record<string, unknown>): { next?: string } => {
+    const next = s.next;
+    return typeof next === "string" && next.startsWith("/") && !next.startsWith("//")
+      ? { next }
+      : {};
+  },
   head: () => ({
     meta: [
       { title: "כניסה למערכת | ניהול שעות ופרויקטים" },
@@ -25,6 +31,7 @@ export const Route = createFileRoute("/auth")({
 
 function AuthPage() {
   const navigate = useNavigate();
+  const { next } = Route.useSearch();
   const { session, loading: authLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -34,8 +41,11 @@ function AuthPage() {
   const [hasUsers, setHasUsers] = useState<boolean | null>(null);
 
   useEffect(() => {
-    if (!authLoading && session) navigate({ to: "/app", replace: true });
-  }, [authLoading, session, navigate]);
+    if (!authLoading && session) {
+      if (next) window.location.replace(next);
+      else navigate({ to: "/app", replace: true });
+    }
+  }, [authLoading, session, navigate, next]);
 
   useEffect(() => {
     supabase
@@ -57,7 +67,8 @@ function AuthPage() {
       toast.error("כניסה נכשלה", { description: "בדוק את שם המשתמש והסיסמה ונסה שוב." });
       return;
     }
-    navigate({ to: "/app", replace: true });
+    if (next) window.location.replace(next);
+    else navigate({ to: "/app", replace: true });
   }
 
   async function createFirstAdmin(e: React.FormEvent) {
@@ -68,7 +79,7 @@ function AuthPage() {
       password,
       options: {
         data: { full_name: fullName.trim() },
-        emailRedirectTo: window.location.origin,
+        emailRedirectTo: next ? `${window.location.origin}${next}` : window.location.origin,
       },
     });
     setBusy(false);
@@ -77,7 +88,8 @@ function AuthPage() {
       return;
     }
     toast.success("המשתמש הראשון נוצר והוגדר כמנהל");
-    navigate({ to: "/app", replace: true });
+    if (next) window.location.replace(next);
+    else navigate({ to: "/app", replace: true });
   }
 
   return (
