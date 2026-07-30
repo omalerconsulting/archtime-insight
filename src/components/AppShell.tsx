@@ -83,6 +83,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const items = NAV.filter((item) => !item.adminOnly || isAdmin);
 
+  if (profile?.must_change_password) return <ForcePasswordChange />;
+
   return (
     <div className="min-h-screen bg-background">
       <header className="no-print sticky top-0 z-40 border-b border-border bg-card/95 backdrop-blur print:hidden">
