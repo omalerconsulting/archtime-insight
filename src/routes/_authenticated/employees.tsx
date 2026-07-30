@@ -149,7 +149,7 @@ function EmployeesPage() {
               <th scope="col" className="p-3 text-start">הרשאת מנהל</th>
               <th scope="col" className="p-3 text-start">פעיל</th>
               <th scope="col" className="p-3 text-start">סיסמה</th>
-              <th scope="col" className="p-3 text-start">מחיקה</th>
+              <th scope="col" className="p-3 text-start">הסרת גישה</th>
             </tr>
           </thead>
           <tbody>
@@ -256,27 +256,28 @@ function DeleteUserButton({
       await del({ data: { user_id: userId } });
     },
     onSuccess: () => {
-      toast.success("המשתמש נמחק מהמערכת");
+      toast.success("גישת המשתמש הוסרה. ההיסטוריה נשמרה");
       onDeleted();
     },
     onError: (e: unknown) =>
-      toast.error(`מחיקת המשתמש נכשלה: ${e instanceof Error ? e.message : "שגיאה"}`),
+      toast.error(`הסרת המשתמש נכשלה: ${e instanceof Error ? e.message : "שגיאה"}`),
   });
 
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button size="sm" variant="destructive" aria-label={`מחיקת המשתמש ${name}`}>
+        <Button size="sm" variant="destructive" aria-label={`הסרת גישה למשתמש ${name}`}>
           <Trash2 className="size-4" />
-          מחיקה
+          מחיקת משתמש
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>מחיקת המשתמש {name}</AlertDialogTitle>
           <AlertDialogDescription>
-            האם אתה בטוח? לאחר המחיקה, לא ניתן לשחזר את המידע. כל דיווחי השעות של העובד יימחקו
-            לצמיתות.
+            האם אתה בטוח? המשתמש לא יוכל עוד להתחבר למערכת ויוסרו הרשאותיו. כל הנתונים
+            ההיסטוריים – דוחות שעות, שעות עבודה בפרויקטים וכל דיווח קודם – יישמרו במלואם
+            לצורכי דיווח וניתוח.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
