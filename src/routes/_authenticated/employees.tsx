@@ -3,11 +3,22 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { UserPlus, KeyRound, Check } from "lucide-react";
+import { UserPlus, KeyRound, Check, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminOnly } from "@/components/AdminOnly";
 import { fmtMoney } from "@/lib/time";
-import { createEmployee, resetEmployeePassword } from "@/lib/admin-users.functions";
+import { createEmployee, resetEmployeePassword, deleteEmployee } from "@/lib/admin-users.functions";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -138,6 +149,7 @@ function EmployeesPage() {
               <th scope="col" className="p-3 text-start">הרשאת מנהל</th>
               <th scope="col" className="p-3 text-start">פעיל</th>
               <th scope="col" className="p-3 text-start">סיסמה</th>
+              <th scope="col" className="p-3 text-start">מחיקה</th>
             </tr>
           </thead>
           <tbody>
@@ -205,6 +217,13 @@ function EmployeesPage() {
                 </td>
                 <td className="p-3">
                   <ResetPasswordDialog userId={p.id} name={p.full_name || p.email} />
+                </td>
+                <td className="p-3">
+                  <DeleteUserButton
+                    userId={p.id}
+                    name={p.full_name || p.email}
+                    onDeleted={() => qc.invalidateQueries({ queryKey: ["employees"] })}
+                  />
                 </td>
               </tr>
             ))}
