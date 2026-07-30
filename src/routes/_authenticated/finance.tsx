@@ -19,7 +19,7 @@ export const Route = createFileRoute("/_authenticated/finance")({
   head: () => ({
     meta: [
       { title: "גבייה וכספים | ניהול שעות ופרויקטים" },
-      { name: "description", content: "מעקב תחנות תשלום, יתרות לגבייה וחריגות לו״ז לישיבות הנהלה." },
+      { name: "description", content: "מעקב תנאי תשלום, יתרות לגבייה וחריגות לו״ז לישיבות הנהלה." },
       { property: "og:title", content: "גבייה וכספים" },
       { property: "og:description", content: "כמה כסף עדיין בחוץ, לפי פרויקט ותחנת תשלום." },
     ],
@@ -108,7 +108,7 @@ function FinancePage() {
         {overdue.length > 0 && (
           <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm">
             <p className="font-semibold text-destructive">
-              התראת גבייה: {overdue.length} תחנות תשלום חרגו מתאריך הצפי, בהיקף {fmtMoney(overdueAmount)}
+              התראת גבייה: {overdue.length} תנאי תשלום חרגו מתאריך הצפי, בהיקף {fmtMoney(overdueAmount)}
             </p>
             <ul className="mt-2 list-inside list-disc space-y-1">
               {overdue
@@ -167,7 +167,7 @@ function FinancePage() {
 
         <section className="overflow-x-auto rounded-xl border border-border bg-card">
           <table className="w-full text-sm">
-            <caption className="p-3 text-start font-semibold">תחנות תשלום פתוחות</caption>
+            <caption className="p-3 text-start font-semibold">תנאי תשלום פתוחות</caption>
             <thead className="bg-muted/60">
               <tr>
                 <th scope="col" className="p-3 text-start">קוד</th>
@@ -200,7 +200,7 @@ function FinancePage() {
               {open.length === 0 && (
                 <tr>
                   <td colSpan={7} className="p-6 text-center text-muted-foreground">
-                    אין תחנות תשלום פתוחות.
+                    אין תנאי תשלום פתוחות.
                   </td>
                 </tr>
               )}

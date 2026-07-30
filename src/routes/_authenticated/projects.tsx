@@ -38,9 +38,9 @@ export const Route = createFileRoute("/_authenticated/projects")({
   head: () => ({
     meta: [
       { title: "ניהול פרויקטים | ניהול שעות ופרויקטים" },
-      { name: "description", content: "הוספת פרויקטים, קודי פרויקט, שכר טרחה ותחנות תשלום." },
+      { name: "description", content: "הוספת פרויקטים, קודי פרויקט, שכר טרחה ותנאי תשלום." },
       { property: "og:title", content: "ניהול פרויקטים" },
-      { property: "og:description", content: "פרויקטים, שכר טרחה, תחנות תשלום ולוחות זמנים." },
+      { property: "og:description", content: "פרויקטים, שכר טרחה, תנאי תשלום ולוחות זמנים." },
     ],
   }),
   component: () => (
@@ -101,7 +101,7 @@ function ProjectsPage() {
         <div>
           <h1 className="text-2xl font-bold">ניהול פרויקטים</h1>
           <p className="text-sm text-muted-foreground">
-            {projects.length} פרויקטים · קוד, שכר טרחה, תחנות תשלום ולוחות זמנים
+            {projects.length} פרויקטים · קוד, שכר טרחה, תנאי תשלום ולוחות זמנים
           </p>
         </div>
         <div className="flex gap-2">
@@ -282,7 +282,7 @@ function ProjectDialog({ project, onSaved }: { project?: ProjectRow; onSaved: ()
     onError: (e: unknown) =>
       toast.error(
         e instanceof Error && e.message === "stations"
-          ? "סכום תחנות התשלום חייב להיות שווה בדיוק לשכר הטרחה (100%)"
+          ? "סכום תנאי התשלום חייב להיות שווה בדיוק לשכר הטרחה (100%)"
           : "שמירה נכשלה – ודא שקוד הפרויקט ייחודי ושכל השדות מולאו",
       ),
   });
@@ -397,7 +397,7 @@ function ProjectDialog({ project, onSaved }: { project?: ProjectRow; onSaved: ()
 
           <div className="space-y-3 rounded-lg border border-border p-4 sm:col-span-2">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold">תחנות תשלום</h3>
+              <h3 className="text-sm font-semibold">תנאי תשלום</h3>
               <Button
                 size="sm"
                 variant="outline"
@@ -586,7 +586,7 @@ function MilestonesPanel({
   return (
     <section className="rounded-xl border border-border bg-card p-6">
       <h2 className="mb-4 text-lg font-semibold">
-        תחנות תשלום – {project.code} · {project.name}
+        תנאי תשלום – {project.code} · {project.name}
       </h2>
 
       <table className="w-full text-sm">
