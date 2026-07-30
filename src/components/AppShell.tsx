@@ -19,6 +19,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
+import { MonthEndNotice } from "@/components/MonthEndNotice";
 import officeLogo from "@/assets/office-logo.png";
 
 type NavItem = { to: string; label: string; icon: typeof Building2; adminOnly?: boolean };
@@ -157,7 +158,10 @@ export function AppShell({ children }: { children: ReactNode }) {
         )}
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-6">{children}</main>
+      <main className="mx-auto max-w-7xl px-4 py-6">
+        <MonthEndNotice />
+        {children}
+      </main>
     </div>
   );
 }
