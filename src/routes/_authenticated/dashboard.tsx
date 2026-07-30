@@ -398,3 +398,15 @@ function Kpi({ label, value, tone }: { label: string; value: string; tone?: "goo
     </div>
   );
 }
+function ChartCard({ title, children }: { title: string; children: React.ReactElement }) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-5">
+      <h2 className="mb-3 text-sm font-semibold">{title}</h2>
+      <div className="h-64" dir="ltr">
+        <ResponsiveContainer width="100%" height="100%">
+          {children}
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
