@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   BarChart3,
   Banknote,
+  TrendingUp,
   Building2,
   CalendarClock,
   FileText,
