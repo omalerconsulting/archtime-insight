@@ -68,6 +68,7 @@ type Milestone = {
   amount_value: number;
   due_date: string | null;
   paid_date: string | null;
+  paid_amount: number;
   status: string;
   sort_order: number;
 };
