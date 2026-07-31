@@ -14,6 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      expenses: {
+        Row: {
+          amount: number
+          category: string
+          created_at: string
+          created_by: string | null
+          description: string
+          expense_date: string
+          id: string
+          is_recurring: boolean
+          notes: string | null
+          recurring_until: string | null
+          updated_at: string
+          vendor: string | null
+        }
+        Insert: {
+          amount?: number
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          expense_date?: string
+          id?: string
+          is_recurring?: boolean
+          notes?: string | null
+          recurring_until?: string | null
+          updated_at?: string
+          vendor?: string | null
+        }
+        Update: {
+          amount?: number
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          expense_date?: string
+          id?: string
+          is_recurring?: boolean
+          notes?: string | null
+          recurring_until?: string | null
+          updated_at?: string
+          vendor?: string | null
+        }
+        Relationships: []
+      }
       org_settings: {
         Row: {
           accountant_email: string | null
@@ -44,6 +89,128 @@ export type Database = {
         }
         Relationships: []
       }
+      other_income_milestones: {
+        Row: {
+          amount_type: string
+          amount_value: number
+          created_at: string
+          due_date: string | null
+          id: string
+          income_id: string
+          paid_amount: number
+          paid_date: string | null
+          sort_order: number
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          amount_type?: string
+          amount_value?: number
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          income_id: string
+          paid_amount?: number
+          paid_date?: string | null
+          sort_order?: number
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          amount_type?: string
+          amount_value?: number
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          income_id?: string
+          paid_amount?: number
+          paid_date?: string | null
+          sort_order?: number
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "other_income_milestones_income_id_fkey"
+            columns: ["income_id"]
+            isOneToOne: false
+            referencedRelation: "other_incomes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      other_incomes: {
+        Row: {
+          category: string
+          client_name: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          notes: string | null
+          source: string
+          status: string
+          total_amount: number
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          client_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          source?: string
+          status?: string
+          total_amount?: number
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          client_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          source?: string
+          status?: string
+          total_amount?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      pnl_adjustments: {
+        Row: {
+          created_at: string
+          expense_override: number | null
+          id: string
+          income_override: number | null
+          month: string
+          note: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          expense_override?: number | null
+          id?: string
+          income_override?: number | null
+          month: string
+          note?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          expense_override?: number | null
+          id?: string
+          income_override?: number | null
+          month?: string
+          note?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           birth_date: string | null
@@ -55,6 +222,7 @@ export type Database = {
           id: string
           is_active: boolean
           is_approved: boolean
+          is_deleted: boolean
           must_change_password: boolean
           national_id: string | null
           phone: string | null
@@ -70,6 +238,7 @@ export type Database = {
           id: string
           is_active?: boolean
           is_approved?: boolean
+          is_deleted?: boolean
           must_change_password?: boolean
           national_id?: string | null
           phone?: string | null
@@ -85,6 +254,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           is_approved?: boolean
+          is_deleted?: boolean
           must_change_password?: boolean
           national_id?: string | null
           phone?: string | null
@@ -140,6 +310,7 @@ export type Database = {
           created_at: string
           due_date: string | null
           id: string
+          paid_amount: number
           paid_date: string | null
           project_id: string
           sort_order: number
@@ -153,6 +324,7 @@ export type Database = {
           created_at?: string
           due_date?: string | null
           id?: string
+          paid_amount?: number
           paid_date?: string | null
           project_id: string
           sort_order?: number
@@ -166,6 +338,7 @@ export type Database = {
           created_at?: string
           due_date?: string | null
           id?: string
+          paid_amount?: number
           paid_date?: string | null
           project_id?: string
           sort_order?: number
