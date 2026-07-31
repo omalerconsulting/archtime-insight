@@ -209,9 +209,10 @@ function ProjectsPage() {
           <tbody>
             {projects.map((p) => {
               const ms = milestones.filter((m) => m.project_id === p.id);
-              const paid = ms
-                .filter((m) => m.status === "paid")
-                .reduce((s, m) => s + milestoneAmount(m.amount_type, Number(m.amount_value), Number(p.fee_total)), 0);
+              const paid = ms.reduce((s, m) => {
+                const full = milestoneAmount(m.amount_type, Number(m.amount_value), Number(p.fee_total));
+                return s + (m.status === "paid" ? full : Math.min(Number(m.paid_amount) || 0, full));
+              }, 0);
               const open = ms.find((m) => m.status !== "paid");
               const late =
                 open?.due_date && daysBetween(open.due_date, todayIso()) > 0
@@ -258,6 +259,14 @@ function ProjectsPage() {
                   <td className="p-3">{projectStatusLabel(p.status)}</td>
                   <td className="p-3 no-print print:hidden">
                     <div className="flex gap-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => toggle(p.id)}
+                        aria-label={`ניהול גבייה עבור ${p.name}`}
+                      >
+                        גבייה ותנאי תשלום
+                      </Button>
                       <ProjectDialog
                         project={p}
                         projectMilestones={ms}
