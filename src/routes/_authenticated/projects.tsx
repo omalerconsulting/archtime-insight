@@ -695,6 +695,39 @@ function Field({ label, id, children }: { label: string; id: string; children: R
   );
 }
 
+function CollectedInput({
+  value,
+  max,
+  onSave,
+}: {
+  value: number;
+  max: number;
+  onSave: (v: number) => void;
+}) {
+  const [draft, setDraft] = useState(String(value || ""));
+  useEffect(() => setDraft(String(value || "")), [value]);
+  const parsed = Math.min(Number(draft) || 0, max);
+  return (
+    <div className="flex items-center gap-1">
+      <Input
+        className="w-28 font-mono tabular-nums"
+        inputMode="decimal"
+        aria-label="סכום שנגבה בפועל"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value.replace(/[^\d.]/g, "").slice(0, 12))}
+      />
+      <Button size="sm" variant="outline" onClick={() => onSave(parsed)}>
+        שמירה
+      </Button>
+      {parsed < max && (
+        <Button size="sm" variant="ghost" onClick={() => onSave(max)}>
+          נגבה במלואו
+        </Button>
+      )}
+    </div>
+  );
+}
+
 function MilestonesPanel({
   project,
   milestones,
