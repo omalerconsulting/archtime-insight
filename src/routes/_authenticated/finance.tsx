@@ -1,10 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { Printer } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminOnly } from "@/components/AdminOnly";
 import { daysBetween, fmtDate, fmtMoney, milestoneAmount, monthLabel, todayIso } from "@/lib/time";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Bar,
   BarChart,
@@ -32,6 +35,7 @@ export const Route = createFileRoute("/_authenticated/finance")({
 });
 
 function FinancePage() {
+  const qc = useQueryClient();
   const q = useQuery({
     queryKey: ["finance"],
     queryFn: async () => {
@@ -48,16 +52,47 @@ function FinancePage() {
   const projects = (q.data?.projects ?? []).filter((p) => p.status !== "closed");
   const milestones = q.data?.milestones ?? [];
 
+  const updateMilestone = useMutation({
+    mutationFn: async ({ id, paid, full }: { id: string; paid: number; full: number }) => {
+      const { error } = await supabase
+        .from("project_milestones")
+        .update({
+          paid_amount: paid,
+          status: paid >= full - 0.5 ? "paid" : paid > 0 ? "invoiced" : "pending",
+          paid_date: paid >= full - 0.5 ? todayIso() : null,
+        })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("עדכון הגבייה נשמר");
+      qc.invalidateQueries({ queryKey: ["finance"] });
+      qc.invalidateQueries({ queryKey: ["projects-full"] });
+      qc.invalidateQueries({ queryKey: ["pnl"] });
+    },
+    onError: () => toast.error("עדכון הגבייה נכשל"),
+  });
+
   const open = projects.flatMap((p) =>
     milestones
       .filter((m) => m.project_id === p.id && m.status !== "paid")
-      .map((m) => ({
-        project: p,
-        milestone: m,
-        amount: milestoneAmount(m.amount_type, Number(m.amount_value), Number(p.fee_total)),
-        lateDays:
-          m.due_date && daysBetween(m.due_date, todayIso()) > 0 ? daysBetween(m.due_date, todayIso()) : 0,
-      })),
+      .map((m) => {
+        const full = milestoneAmount(m.amount_type, Number(m.amount_value), Number(p.fee_total));
+        const collected = Math.min(Number(m.paid_amount) || 0, full);
+        const amount = Math.max(0, full - collected);
+        return {
+          project: p,
+          milestone: m,
+          full,
+          collected,
+          amount,
+          lateDays:
+            amount > 0 && m.due_date && daysBetween(m.due_date, todayIso()) > 0
+              ? daysBetween(m.due_date, todayIso())
+              : 0,
+        };
+      })
+      .filter((r) => r.amount > 0),
   );
 
   const totalOutstanding = open.reduce((s, r) => s + r.amount, 0);
