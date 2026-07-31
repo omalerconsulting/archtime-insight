@@ -51,12 +51,15 @@ export const Route = createFileRoute("/_authenticated/employees")({
 function EmployeesPage() {
   const qc = useQueryClient();
   const [rates, setRates] = useState<Record<string, string>>({});
+  const [checked, setChecked] = useState<string[]>([]);
+  const [bulkDelete, setBulkDelete] = useState(false);
+  const bulkDel = useServerFn(deleteEmployee);
 
   const q = useQuery({
     queryKey: ["employees"],
     queryFn: async () => {
       const [profiles, roles] = await Promise.all([
-        supabase.from("profiles").select("*").order("full_name"),
+        supabase.from("profiles").select("*").eq("is_deleted", false).order("full_name"),
         supabase.from("user_roles").select("*"),
       ]);
       if (profiles.error) throw profiles.error;
@@ -123,6 +126,53 @@ function EmployeesPage() {
 
   const isAdminUser = (id: string) => Boolean(q.data?.roles.some((r) => r.user_id === id && r.role === "admin"));
 
+  const profiles = q.data?.profiles ?? [];
+  const allChecked = profiles.length > 0 && profiles.every((p) => checked.includes(p.id));
+  const toggle = (id: string) =>
+    setChecked((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
+
+  const bulk = useMutation({
+    mutationFn: async (action: "approve" | "activate" | "deactivate" | "admin" | "unadmin" | "delete") => {
+      const ids = [...checked];
+      if (action === "delete") {
+        for (const id of ids) await bulkDel({ data: { user_id: id } });
+        return;
+      }
+      if (action === "approve") {
+        const { error } = await supabase.from("profiles").update({ is_approved: true }).in("id", ids);
+        if (error) throw error;
+        return;
+      }
+      if (action === "activate" || action === "deactivate") {
+        const { error } = await supabase
+          .from("profiles")
+          .update({ is_active: action === "activate" })
+          .in("id", ids);
+        if (error) throw error;
+        return;
+      }
+      if (action === "admin") {
+        const missing = ids.filter((id) => !isAdminUser(id));
+        if (missing.length) {
+          const { error } = await supabase
+            .from("user_roles")
+            .insert(missing.map((id) => ({ user_id: id, role: "admin" as const })));
+          if (error) throw error;
+        }
+        return;
+      }
+      const { error } = await supabase.from("user_roles").delete().in("user_id", ids).eq("role", "admin");
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("הפעולה בוצעה על המשתמשים המסומנים");
+      setChecked([]);
+      qc.invalidateQueries({ queryKey: ["employees"] });
+    },
+    onError: (e: unknown) =>
+      toast.error(`הפעולה נכשלה: ${e instanceof Error ? e.message : "שגיאה"}`),
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -135,11 +185,63 @@ function EmployeesPage() {
         <NewUserDialog onCreated={() => qc.invalidateQueries({ queryKey: ["employees"] })} />
       </div>
 
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-4">
+        <span className="text-sm text-muted-foreground">{checked.length} משתמשים מסומנים</span>
+        <Button size="sm" variant="outline" disabled={!checked.length || bulk.isPending} onClick={() => bulk.mutate("approve")}>
+          אישור כניסה
+        </Button>
+        <Button size="sm" variant="outline" disabled={!checked.length || bulk.isPending} onClick={() => bulk.mutate("admin")}>
+          מתן הרשאת מנהל
+        </Button>
+        <Button size="sm" variant="outline" disabled={!checked.length || bulk.isPending} onClick={() => bulk.mutate("unadmin")}>
+          הסרת הרשאת מנהל
+        </Button>
+        <Button size="sm" variant="outline" disabled={!checked.length || bulk.isPending} onClick={() => bulk.mutate("activate")}>
+          הפעלה
+        </Button>
+        <Button size="sm" variant="outline" disabled={!checked.length || bulk.isPending} onClick={() => bulk.mutate("deactivate")}>
+          השבתה
+        </Button>
+        <Button size="sm" variant="destructive" disabled={!checked.length || bulk.isPending} onClick={() => setBulkDelete(true)}>
+          <Trash2 className="size-4" />
+          מחיקת המסומנים
+        </Button>
+        {checked.length > 0 && (
+          <Button size="sm" variant="ghost" onClick={() => setChecked([])}>
+            ניקוי סימון
+          </Button>
+        )}
+      </div>
+
+      <AlertDialog open={bulkDelete} onOpenChange={setBulkDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>מחיקת {checked.length} משתמשים</AlertDialogTitle>
+            <AlertDialogDescription>
+              המשתמשים יוסרו מהרשימה ולא יוכלו להתחבר. כל נתוני השעות ההיסטוריים יישמרו.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>לא</AlertDialogCancel>
+            <AlertDialogAction onClick={() => bulk.mutate("delete")}>כן, מחק</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <div className="overflow-x-auto rounded-xl border border-border bg-card">
         <table className="w-full text-sm">
           <caption className="sr-only">רשימת עובדים</caption>
           <thead className="bg-muted/60">
             <tr>
+              <th scope="col" className="p-3 text-start">
+                <input
+                  type="checkbox"
+                  aria-label="סימון כל המשתמשים"
+                  className="size-4 accent-[var(--primary)]"
+                  checked={allChecked}
+                  onChange={() => setChecked(allChecked ? [] : profiles.map((p) => p.id))}
+                />
+              </th>
               <th scope="col" className="p-3 text-start">שם</th>
               <th scope="col" className="p-3 text-start">דוא״ל</th>
               <th scope="col" className="p-3 text-start">פרטים מזהים</th>
@@ -153,8 +255,17 @@ function EmployeesPage() {
             </tr>
           </thead>
           <tbody>
-            {(q.data?.profiles ?? []).map((p) => (
+            {profiles.map((p) => (
               <tr key={p.id} className="border-t border-border">
+                <td className="p-3">
+                  <input
+                    type="checkbox"
+                    aria-label={`סימון ${p.full_name || p.email}`}
+                    className="size-4 accent-[var(--primary)]"
+                    checked={checked.includes(p.id)}
+                    onChange={() => toggle(p.id)}
+                  />
+                </td>
                 <td className="p-3 font-medium">{p.full_name || "—"}</td>
                 <td className="p-3">{p.email}</td>
                 <td className="p-3 text-xs text-muted-foreground">
