@@ -209,9 +209,11 @@ function FinancePage() {
                 <th scope="col" className="p-3 text-start">פרויקט</th>
                 <th scope="col" className="p-3 text-start">לקוח</th>
                 <th scope="col" className="p-3 text-start">שלב</th>
-                <th scope="col" className="p-3 text-start">סכום</th>
+                <th scope="col" className="p-3 text-start">יתרה לגבייה</th>
+                <th scope="col" className="p-3 text-start">נגבה בפועל</th>
                 <th scope="col" className="p-3 text-start">לו״ז</th>
                 <th scope="col" className="p-3 text-start">סטטוס</th>
+                <th scope="col" className="p-3 text-start no-print print:hidden">עדכון גבייה</th>
               </tr>
             </thead>
             <tbody>
@@ -225,16 +227,27 @@ function FinancePage() {
                   <td className="p-3">{r.project.client_name || "—"}</td>
                   <td className="p-3">{r.milestone.title}</td>
                   <td className="p-3">{fmtMoney(r.amount)}</td>
+                  <td className="p-3">{fmtMoney(r.collected)} מתוך {fmtMoney(r.full)}</td>
                   <td className={`p-3 ${r.lateDays ? "font-semibold text-destructive" : ""}`}>
                     {r.milestone.due_date ? fmtDate(r.milestone.due_date) : "—"}
                     {r.lateDays > 0 && ` · חריגה ${r.lateDays} ימים`}
                   </td>
-                  <td className="p-3">{r.milestone.status === "invoiced" ? "חויב" : "ממתין"}</td>
+                  <td className="p-3">
+                    {r.collected > 0 ? "נגבה חלקית" : r.milestone.status === "invoiced" ? "חויב" : "ממתין"}
+                  </td>
+                  <td className="p-3 no-print print:hidden">
+                    <CollectRow
+                      value={r.collected}
+                      max={r.full}
+                      pending={updateMilestone.isPending}
+                      onSave={(v) => updateMilestone.mutate({ id: r.milestone.id, paid: v, full: r.full })}
+                    />
+                  </td>
                 </tr>
               ))}
               {open.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="p-6 text-center text-muted-foreground">
+                  <td colSpan={9} className="p-6 text-center text-muted-foreground">
                     אין תנאי תשלום פתוחים.
                   </td>
                 </tr>
