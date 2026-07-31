@@ -7,6 +7,9 @@ import { AdminOnly } from "@/components/AdminOnly";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useServerFn } from "@tanstack/react-start";
+import { AlertTriangle } from "lucide-react";
+import { purgeData, RESET_SCOPES, type ResetScope } from "@/lib/admin-reset.functions";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({
@@ -172,6 +175,102 @@ function SettingsPage() {
           שמירת הגדרות
         </Button>
       </div>
+
+      <DangerZone />
     </div>
+  );
+}
+
+const SCOPE_LABELS: Record<ResetScope, string> = {
+  time_entries: "דיווחי נוכחות (כניסה/יציאה/היעדרויות)",
+  project_hours: "שעות עבודה בפרויקטים",
+  projects: "פרויקטים ותחנות תשלום",
+  expenses: "הוצאות",
+  other_incomes: "הכנסות שאינן מפרויקטים",
+  pnl_adjustments: "תיקונים ידניים ברווח והפסד",
+  employees: "עובדים (מחיקה מלאה של משתמשים שאינם מנהלים)",
+};
+
+function DangerZone() {
+  const qc = useQueryClient();
+  const purge = useServerFn(purgeData);
+  const [selected, setSelected] = useState<ResetScope[]>([]);
+  const [confirm, setConfirm] = useState("");
+
+  const run = useMutation({
+    mutationFn: async () => purge({ data: { scopes: selected, confirm: confirm as "מחק לצמיתות" } }),
+    onSuccess: () => {
+      toast.success("המידע נמחק לצמיתות");
+      setSelected([]);
+      setConfirm("");
+      qc.invalidateQueries();
+    },
+    onError: (e: unknown) =>
+      toast.error(`המחיקה נכשלה: ${e instanceof Error ? e.message : "שגיאה לא ידועה"}`),
+  });
+
+  const toggle = (s: ResetScope) =>
+    setSelected((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
+
+  const ready = selected.length > 0 && confirm.trim() === "מחק לצמיתות";
+
+  return (
+    <section className="space-y-4 rounded-xl border border-destructive/50 bg-destructive/5 p-6">
+      <div className="flex items-center gap-2 text-destructive">
+        <AlertTriangle className="size-5" />
+        <h2 className="text-lg font-bold">מחיקה ואיפוס מידע (מנהל בלבד)</h2>
+      </div>
+      <p className="text-sm text-muted-foreground">
+        פעולה זו מוחקת את המידע לצמיתות ואינה ניתנת לשחזור. יש לבחור את סוגי המידע למחיקה ולאשר
+        בכתיבת המילים <span className="font-semibold">מחק לצמיתות</span>.
+      </p>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        {RESET_SCOPES.map((s) => (
+          <label key={s} className="flex items-start gap-2 rounded-lg border border-border bg-card p-3 text-sm">
+            <input
+              type="checkbox"
+              className="mt-1 size-4 accent-[var(--destructive)]"
+              checked={selected.includes(s)}
+              onChange={() => toggle(s)}
+            />
+            <span>{SCOPE_LABELS[s]}</span>
+          </label>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setSelected(selected.length === RESET_SCOPES.length ? [] : [...RESET_SCOPES])}
+        >
+          {selected.length === RESET_SCOPES.length ? "ניקוי בחירה" : "בחירת הכל (איפוס מלא)"}
+        </Button>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="cf">אישור מחיקה</Label>
+        <Input
+          id="cf"
+          placeholder="מחק לצמיתות"
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+        />
+      </div>
+
+      <Button
+        variant="destructive"
+        disabled={!ready || run.isPending}
+        onClick={() => {
+          if (window.confirm("למחוק את המידע שנבחר לצמיתות? לא ניתן לשחזר.")) run.mutate();
+        }}
+      >
+        {run.isPending ? "מוחק..." : "מחיקה לצמיתות"}
+      </Button>
+      <p className="text-xs text-muted-foreground">
+        חשבונות מנהל וחשבונך שלך לעולם אינם נמחקים בפעולה זו.
+      </p>
+    </section>
   );
 }
