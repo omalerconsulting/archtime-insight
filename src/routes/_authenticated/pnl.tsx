@@ -137,7 +137,15 @@ function PnlPage() {
       otherForecast: 0,
       expenses: 0,
     }));
-    if (!d) return base;
+    if (!d)
+      return base.map((r) => ({
+        ...r,
+        note: "",
+        overridden: false,
+        income: 0,
+        totalExpenses: 0,
+        profit: 0,
+      }));
     const byKey = new Map(base.map((r) => [r.key, r]));
 
     d.milestones.forEach((m) => {
