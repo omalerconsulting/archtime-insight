@@ -3,6 +3,7 @@ export const ABSENCE_TYPES = [
   { value: "sick", label: "מחלה" },
   { value: "reserve", label: "מילואים" },
   { value: "travel", label: "נסיעת עבודה" },
+  { value: "site_visit", label: "סיור בשטח" },
   { value: "holiday", label: "חג" },
   { value: "choice_day", label: "יום בחירה" },
   { value: "other", label: "היעדרות אחרת" },
