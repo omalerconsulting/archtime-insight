@@ -268,3 +268,35 @@ function Card({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+function CollectRow({
+  value,
+  max,
+  pending,
+  onSave,
+}: {
+  value: number;
+  max: number;
+  pending: boolean;
+  onSave: (v: number) => void;
+}) {
+  const [draft, setDraft] = useState(String(value || ""));
+  useEffect(() => setDraft(String(value || "")), [value]);
+  const parsed = Math.min(Number(draft) || 0, max);
+  return (
+    <div className="flex items-center gap-1">
+      <Input
+        className="w-24 font-mono tabular-nums"
+        inputMode="decimal"
+        aria-label="סכום שנגבה"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value.replace(/[^\d.]/g, "").slice(0, 12))}
+      />
+      <Button size="sm" variant="outline" disabled={pending} onClick={() => onSave(parsed)}>
+        שמירה
+      </Button>
+      <Button size="sm" variant="ghost" disabled={pending} onClick={() => onSave(max)}>
+        נגבה במלואו
+      </Button>
+    </div>
+  );
+}
