@@ -32,6 +32,7 @@ const NAV: NavItem[] = [
   { to: "/dashboard", label: "דשבורד ניהולי", icon: BarChart3, adminOnly: true },
   { to: "/projects", label: "פרויקטים", icon: FolderKanban, adminOnly: true },
   { to: "/finance", label: "גבייה וכספים", icon: Banknote, adminOnly: true },
+  { to: "/pnl", label: "רווח והפסד", icon: TrendingUp, adminOnly: true },
   { to: "/employees", label: "עובדים", icon: Users, adminOnly: true },
   { to: "/settings", label: "הגדרות משרד", icon: Settings, adminOnly: true },
   { to: "/guide", label: "הוראות הפעלה", icon: BookOpen },
