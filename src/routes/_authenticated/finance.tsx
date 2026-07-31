@@ -1,10 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { Printer } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminOnly } from "@/components/AdminOnly";
 import { daysBetween, fmtDate, fmtMoney, milestoneAmount, monthLabel, todayIso } from "@/lib/time";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Bar,
   BarChart,
@@ -32,6 +35,7 @@ export const Route = createFileRoute("/_authenticated/finance")({
 });
 
 function FinancePage() {
+  const qc = useQueryClient();
   const q = useQuery({
     queryKey: ["finance"],
     queryFn: async () => {
@@ -48,16 +52,47 @@ function FinancePage() {
   const projects = (q.data?.projects ?? []).filter((p) => p.status !== "closed");
   const milestones = q.data?.milestones ?? [];
 
+  const updateMilestone = useMutation({
+    mutationFn: async ({ id, paid, full }: { id: string; paid: number; full: number }) => {
+      const { error } = await supabase
+        .from("project_milestones")
+        .update({
+          paid_amount: paid,
+          status: paid >= full - 0.5 ? "paid" : paid > 0 ? "invoiced" : "pending",
+          paid_date: paid >= full - 0.5 ? todayIso() : null,
+        })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("עדכון הגבייה נשמר");
+      qc.invalidateQueries({ queryKey: ["finance"] });
+      qc.invalidateQueries({ queryKey: ["projects-full"] });
+      qc.invalidateQueries({ queryKey: ["pnl"] });
+    },
+    onError: () => toast.error("עדכון הגבייה נכשל"),
+  });
+
   const open = projects.flatMap((p) =>
     milestones
       .filter((m) => m.project_id === p.id && m.status !== "paid")
-      .map((m) => ({
-        project: p,
-        milestone: m,
-        amount: milestoneAmount(m.amount_type, Number(m.amount_value), Number(p.fee_total)),
-        lateDays:
-          m.due_date && daysBetween(m.due_date, todayIso()) > 0 ? daysBetween(m.due_date, todayIso()) : 0,
-      })),
+      .map((m) => {
+        const full = milestoneAmount(m.amount_type, Number(m.amount_value), Number(p.fee_total));
+        const collected = Math.min(Number(m.paid_amount) || 0, full);
+        const amount = Math.max(0, full - collected);
+        return {
+          project: p,
+          milestone: m,
+          full,
+          collected,
+          amount,
+          lateDays:
+            amount > 0 && m.due_date && daysBetween(m.due_date, todayIso()) > 0
+              ? daysBetween(m.due_date, todayIso())
+              : 0,
+        };
+      })
+      .filter((r) => r.amount > 0),
   );
 
   const totalOutstanding = open.reduce((s, r) => s + r.amount, 0);
@@ -174,9 +209,11 @@ function FinancePage() {
                 <th scope="col" className="p-3 text-start">פרויקט</th>
                 <th scope="col" className="p-3 text-start">לקוח</th>
                 <th scope="col" className="p-3 text-start">שלב</th>
-                <th scope="col" className="p-3 text-start">סכום</th>
+                <th scope="col" className="p-3 text-start">יתרה לגבייה</th>
+                <th scope="col" className="p-3 text-start">נגבה בפועל</th>
                 <th scope="col" className="p-3 text-start">לו״ז</th>
                 <th scope="col" className="p-3 text-start">סטטוס</th>
+                <th scope="col" className="p-3 text-start no-print print:hidden">עדכון גבייה</th>
               </tr>
             </thead>
             <tbody>
@@ -190,16 +227,27 @@ function FinancePage() {
                   <td className="p-3">{r.project.client_name || "—"}</td>
                   <td className="p-3">{r.milestone.title}</td>
                   <td className="p-3">{fmtMoney(r.amount)}</td>
+                  <td className="p-3">{fmtMoney(r.collected)} מתוך {fmtMoney(r.full)}</td>
                   <td className={`p-3 ${r.lateDays ? "font-semibold text-destructive" : ""}`}>
                     {r.milestone.due_date ? fmtDate(r.milestone.due_date) : "—"}
                     {r.lateDays > 0 && ` · חריגה ${r.lateDays} ימים`}
                   </td>
-                  <td className="p-3">{r.milestone.status === "invoiced" ? "חויב" : "ממתין"}</td>
+                  <td className="p-3">
+                    {r.collected > 0 ? "נגבה חלקית" : r.milestone.status === "invoiced" ? "חויב" : "ממתין"}
+                  </td>
+                  <td className="p-3 no-print print:hidden">
+                    <CollectRow
+                      value={r.collected}
+                      max={r.full}
+                      pending={updateMilestone.isPending}
+                      onSave={(v) => updateMilestone.mutate({ id: r.milestone.id, paid: v, full: r.full })}
+                    />
+                  </td>
                 </tr>
               ))}
               {open.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="p-6 text-center text-muted-foreground">
+                  <td colSpan={9} className="p-6 text-center text-muted-foreground">
                     אין תנאי תשלום פתוחים.
                   </td>
                 </tr>
@@ -217,6 +265,38 @@ function Card({ label, value }: { label: string; value: string }) {
     <div className="rounded-xl border border-border bg-card p-5">
       <p className="text-sm text-muted-foreground">{label}</p>
       <p className="mt-2 text-2xl font-bold">{value}</p>
+    </div>
+  );
+}
+function CollectRow({
+  value,
+  max,
+  pending,
+  onSave,
+}: {
+  value: number;
+  max: number;
+  pending: boolean;
+  onSave: (v: number) => void;
+}) {
+  const [draft, setDraft] = useState(String(value || ""));
+  useEffect(() => setDraft(String(value || "")), [value]);
+  const parsed = Math.min(Number(draft) || 0, max);
+  return (
+    <div className="flex items-center gap-1">
+      <Input
+        className="w-24 font-mono tabular-nums"
+        inputMode="decimal"
+        aria-label="סכום שנגבה"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value.replace(/[^\d.]/g, "").slice(0, 12))}
+      />
+      <Button size="sm" variant="outline" disabled={pending} onClick={() => onSave(parsed)}>
+        שמירה
+      </Button>
+      <Button size="sm" variant="ghost" disabled={pending} onClick={() => onSave(max)}>
+        נגבה במלואו
+      </Button>
     </div>
   );
 }

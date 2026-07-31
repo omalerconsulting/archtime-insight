@@ -68,6 +68,7 @@ type Milestone = {
   amount_value: number;
   due_date: string | null;
   paid_date: string | null;
+  paid_amount: number;
   status: string;
   sort_order: number;
 };
@@ -208,9 +209,10 @@ function ProjectsPage() {
           <tbody>
             {projects.map((p) => {
               const ms = milestones.filter((m) => m.project_id === p.id);
-              const paid = ms
-                .filter((m) => m.status === "paid")
-                .reduce((s, m) => s + milestoneAmount(m.amount_type, Number(m.amount_value), Number(p.fee_total)), 0);
+              const paid = ms.reduce((s, m) => {
+                const full = milestoneAmount(m.amount_type, Number(m.amount_value), Number(p.fee_total));
+                return s + (m.status === "paid" ? full : Math.min(Number(m.paid_amount) || 0, full));
+              }, 0);
               const open = ms.find((m) => m.status !== "paid");
               const late =
                 open?.due_date && daysBetween(open.due_date, todayIso()) > 0
@@ -257,6 +259,14 @@ function ProjectsPage() {
                   <td className="p-3">{projectStatusLabel(p.status)}</td>
                   <td className="p-3 no-print print:hidden">
                     <div className="flex gap-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => toggle(p.id)}
+                        aria-label={`ניהול גבייה עבור ${p.name}`}
+                      >
+                        גבייה ותנאי תשלום
+                      </Button>
                       <ProjectDialog
                         project={p}
                         projectMilestones={ms}
@@ -685,6 +695,39 @@ function Field({ label, id, children }: { label: string; id: string; children: R
   );
 }
 
+function CollectedInput({
+  value,
+  max,
+  onSave,
+}: {
+  value: number;
+  max: number;
+  onSave: (v: number) => void;
+}) {
+  const [draft, setDraft] = useState(String(value || ""));
+  useEffect(() => setDraft(String(value || "")), [value]);
+  const parsed = Math.min(Number(draft) || 0, max);
+  return (
+    <div className="flex items-center gap-1">
+      <Input
+        className="w-28 font-mono tabular-nums"
+        inputMode="decimal"
+        aria-label="סכום שנגבה בפועל"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value.replace(/[^\d.]/g, "").slice(0, 12))}
+      />
+      <Button size="sm" variant="outline" onClick={() => onSave(parsed)}>
+        שמירה
+      </Button>
+      {parsed < max && (
+        <Button size="sm" variant="ghost" onClick={() => onSave(max)}>
+          נגבה במלואו
+        </Button>
+      )}
+    </div>
+  );
+}
+
 function MilestonesPanel({
   project,
   milestones,
@@ -727,12 +770,16 @@ function MilestonesPanel({
       patch,
     }: {
       id: string;
-      patch: { status: string; paid_date: string | null };
+      patch: { status?: string; paid_date?: string | null; paid_amount?: number };
     }) => {
       const { error } = await supabase.from("project_milestones").update(patch).eq("id", id);
       if (error) throw error;
     },
-    onSuccess: onChanged,
+    onSuccess: () => {
+      toast.success("עדכון הגבייה נשמר");
+      onChanged();
+    },
+    onError: () => toast.error("עדכון הגבייה נכשל"),
   });
 
   const remove = useMutation({
@@ -748,6 +795,10 @@ function MilestonesPanel({
       <h2 className="mb-4 text-lg font-semibold">
         תנאי תשלום – {project.code} · {project.name}
       </h2>
+      <p className="mb-3 text-sm text-muted-foreground">
+        ניתן לעדכן סטטוס גבייה לכל תחנה, ולרשום גבייה חלקית בשדה "נגבה בפועל". תחנה שנגבתה במלואה
+        לא תיספר עוד כחריגה או כיתרה לגבייה.
+      </p>
 
       <table className="w-full text-sm">
         <thead className="bg-muted/60">
@@ -756,6 +807,8 @@ function MilestonesPanel({
             <th scope="col" className="p-2 text-start">סוג</th>
             <th scope="col" className="p-2 text-start">ערך</th>
             <th scope="col" className="p-2 text-start">סכום</th>
+            <th scope="col" className="p-2 text-start">נגבה בפועל</th>
+            <th scope="col" className="p-2 text-start">יתרה</th>
             <th scope="col" className="p-2 text-start">לו״ז לביצוע</th>
             <th scope="col" className="p-2 text-start">סטטוס</th>
             <th scope="col" className="p-2 text-start">פעולות</th>
@@ -763,8 +816,11 @@ function MilestonesPanel({
         </thead>
         <tbody>
           {milestones.map((m) => {
+            const full = milestoneAmount(m.amount_type, Number(m.amount_value), Number(project.fee_total));
+            const collected = m.status === "paid" ? full : Math.min(Number(m.paid_amount) || 0, full);
+            const remaining = Math.max(0, full - collected);
             const late =
-              m.status !== "paid" && m.due_date && daysBetween(m.due_date, todayIso()) > 0
+              remaining > 0 && m.due_date && daysBetween(m.due_date, todayIso()) > 0
                 ? daysBetween(m.due_date, todayIso())
                 : 0;
             return (
@@ -774,8 +830,25 @@ function MilestonesPanel({
                 <td className="p-2">
                   {m.amount_type === "percent" ? `${m.amount_value}%` : fmtMoney(Number(m.amount_value))}
                 </td>
+                <td className="p-2">{fmtMoney(full)}</td>
                 <td className="p-2">
-                  {fmtMoney(milestoneAmount(m.amount_type, Number(m.amount_value), Number(project.fee_total)))}
+                  <CollectedInput
+                    value={collected}
+                    max={full}
+                    onSave={(v) =>
+                      update.mutate({
+                        id: m.id,
+                        patch: {
+                          paid_amount: v,
+                          status: v >= full - 0.5 ? "paid" : v > 0 ? "invoiced" : m.status === "paid" ? "pending" : m.status,
+                          paid_date: v >= full - 0.5 ? todayIso() : null,
+                        },
+                      })
+                    }
+                  />
+                </td>
+                <td className={`p-2 ${remaining === 0 ? "text-emerald-600" : ""}`}>
+                  {remaining === 0 ? "נגבה במלואו" : fmtMoney(remaining)}
                 </td>
                 <td className={`p-2 ${late ? "font-semibold text-destructive" : ""}`}>
                   {m.due_date ? fmtDate(m.due_date) : "—"}
@@ -787,7 +860,11 @@ function MilestonesPanel({
                     onValueChange={(v) =>
                       update.mutate({
                         id: m.id,
-                        patch: { status: v, paid_date: v === "paid" ? todayIso() : null },
+                        patch: {
+                          status: v,
+                          paid_date: v === "paid" ? todayIso() : null,
+                          paid_amount: v === "paid" ? full : v === "pending" ? 0 : collected,
+                        },
                       })
                     }
                   >
@@ -796,8 +873,8 @@ function MilestonesPanel({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="pending">ממתין</SelectItem>
-                      <SelectItem value="invoiced">חויב</SelectItem>
-                      <SelectItem value="paid">שולם</SelectItem>
+                      <SelectItem value="invoiced">חויב / נגבה חלקית</SelectItem>
+                      <SelectItem value="paid">שולם במלואו</SelectItem>
                     </SelectContent>
                   </Select>
                 </td>
