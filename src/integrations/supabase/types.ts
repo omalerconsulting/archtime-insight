@@ -14,6 +14,32 @@ export type Database = {
   }
   public: {
     Tables: {
+      active_timers: {
+        Row: {
+          project_id: string
+          started_at: string
+          user_id: string
+        }
+        Insert: {
+          project_id: string
+          started_at?: string
+          user_id: string
+        }
+        Update: {
+          project_id?: string
+          started_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "active_timers_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       expenses: {
         Row: {
           amount: number
@@ -56,6 +82,45 @@ export type Database = {
           recurring_until?: string | null
           updated_at?: string
           vendor?: string | null
+        }
+        Relationships: []
+      }
+      monthly_reports: {
+        Row: {
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          id: string
+          manager_note: string | null
+          month: string
+          status: string
+          submitted_at: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          id?: string
+          manager_note?: string | null
+          month: string
+          status?: string
+          submitted_at?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          id?: string
+          manager_note?: string | null
+          month?: string
+          status?: string
+          submitted_at?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -218,6 +283,7 @@ export type Database = {
           created_at: string
           email: string
           full_name: string
+          hire_date: string | null
           hourly_rate: number | null
           id: string
           is_active: boolean
@@ -227,6 +293,7 @@ export type Database = {
           national_id: string | null
           phone: string | null
           updated_at: string
+          vacation_quota: number
         }
         Insert: {
           birth_date?: string | null
@@ -234,6 +301,7 @@ export type Database = {
           created_at?: string
           email?: string
           full_name?: string
+          hire_date?: string | null
           hourly_rate?: number | null
           id: string
           is_active?: boolean
@@ -243,6 +311,7 @@ export type Database = {
           national_id?: string | null
           phone?: string | null
           updated_at?: string
+          vacation_quota?: number
         }
         Update: {
           birth_date?: string | null
@@ -250,6 +319,7 @@ export type Database = {
           created_at?: string
           email?: string
           full_name?: string
+          hire_date?: string | null
           hourly_rate?: number | null
           id?: string
           is_active?: boolean
@@ -259,6 +329,7 @@ export type Database = {
           national_id?: string | null
           phone?: string | null
           updated_at?: string
+          vacation_quota?: number
         }
         Relationships: []
       }
@@ -405,6 +476,7 @@ export type Database = {
         Row: {
           absence_type: string | null
           break_minutes: number
+          break_start: string | null
           clock_in: string | null
           clock_out: string | null
           created_at: string
@@ -422,6 +494,7 @@ export type Database = {
         Insert: {
           absence_type?: string | null
           break_minutes?: number
+          break_start?: string | null
           clock_in?: string | null
           clock_out?: string | null
           created_at?: string
@@ -439,6 +512,7 @@ export type Database = {
         Update: {
           absence_type?: string | null
           break_minutes?: number
+          break_start?: string | null
           clock_in?: string | null
           clock_out?: string | null
           created_at?: string
@@ -499,6 +573,7 @@ export type Database = {
           status: string
         }[]
       }
+      month_editable: { Args: { _work_date: string }; Returns: boolean }
       period_open: { Args: { _work_date: string }; Returns: boolean }
     }
     Enums: {
