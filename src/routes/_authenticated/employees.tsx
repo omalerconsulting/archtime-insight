@@ -36,7 +36,10 @@ export const Route = createFileRoute("/_authenticated/employees")({
   head: () => ({
     meta: [
       { title: "ניהול עובדים | ניהול שעות ופרויקטים" },
-      { name: "description", content: "הרשאות מנהל, תעריף עלות לשעה וסטטוס פעילות של עובדי המשרד." },
+      {
+        name: "description",
+        content: "הרשאות מנהל, תעריף עלות לשעה וסטטוס פעילות של עובדי המשרד.",
+      },
       { property: "og:title", content: "ניהול עובדים" },
       { property: "og:description", content: "הרשאות, תעריפי עלות וסטטוס עובדים." },
     ],
@@ -51,6 +54,7 @@ export const Route = createFileRoute("/_authenticated/employees")({
 function EmployeesPage() {
   const qc = useQueryClient();
   const [rates, setRates] = useState<Record<string, string>>({});
+  const [hr, setHr] = useState<Record<string, { hire: string; quota: string }>>({});
   const [checked, setChecked] = useState<string[]>([]);
   const [bulkDelete, setBulkDelete] = useState(false);
   const bulkDel = useServerFn(deleteEmployee);
@@ -71,7 +75,9 @@ function EmployeesPage() {
   const setRole = useMutation({
     mutationFn: async ({ userId, admin }: { userId: string; admin: boolean }) => {
       if (admin) {
-        const { error } = await supabase.from("user_roles").insert({ user_id: userId, role: "admin" });
+        const { error } = await supabase
+          .from("user_roles")
+          .insert({ user_id: userId, role: "admin" });
         if (error) throw error;
       } else {
         const { error } = await supabase
@@ -91,10 +97,39 @@ function EmployeesPage() {
 
   const setActive = useMutation({
     mutationFn: async ({ userId, active }: { userId: string; active: boolean }) => {
-      const { error } = await supabase.from("profiles").update({ is_active: active }).eq("id", userId);
+      const { error } = await supabase
+        .from("profiles")
+        .update({ is_active: active })
+        .eq("id", userId);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["employees"] }),
+  });
+
+  const saveHr = useMutation({
+    mutationFn: async ({
+      userId,
+      hire,
+      quota,
+    }: {
+      userId: string;
+      hire: string;
+      quota: string;
+    }) => {
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          hire_date: hire || null,
+          vacation_quota: Number(quota) || 0,
+        })
+        .eq("id", userId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("נתוני הוותק והחופשה נשמרו");
+      qc.invalidateQueries({ queryKey: ["employees"] });
+    },
+    onError: () => toast.error("השמירה נכשלה"),
   });
 
   const approve = useMutation({
@@ -114,7 +149,10 @@ function EmployeesPage() {
 
   const setCost = useMutation({
     mutationFn: async ({ userId, value }: { userId: string; value: number | null }) => {
-      const { error } = await supabase.from("profiles").update({ cost_rate: value }).eq("id", userId);
+      const { error } = await supabase
+        .from("profiles")
+        .update({ cost_rate: value })
+        .eq("id", userId);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -124,7 +162,8 @@ function EmployeesPage() {
     },
   });
 
-  const isAdminUser = (id: string) => Boolean(q.data?.roles.some((r) => r.user_id === id && r.role === "admin"));
+  const isAdminUser = (id: string) =>
+    Boolean(q.data?.roles.some((r) => r.user_id === id && r.role === "admin"));
 
   const profiles = q.data?.profiles ?? [];
   const allChecked = profiles.length > 0 && profiles.every((p) => checked.includes(p.id));
@@ -132,14 +171,19 @@ function EmployeesPage() {
     setChecked((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
 
   const bulk = useMutation({
-    mutationFn: async (action: "approve" | "activate" | "deactivate" | "admin" | "unadmin" | "delete") => {
+    mutationFn: async (
+      action: "approve" | "activate" | "deactivate" | "admin" | "unadmin" | "delete",
+    ) => {
       const ids = [...checked];
       if (action === "delete") {
         for (const id of ids) await bulkDel({ data: { user_id: id } });
         return;
       }
       if (action === "approve") {
-        const { error } = await supabase.from("profiles").update({ is_approved: true }).in("id", ids);
+        const { error } = await supabase
+          .from("profiles")
+          .update({ is_approved: true })
+          .in("id", ids);
         if (error) throw error;
         return;
       }
@@ -161,7 +205,11 @@ function EmployeesPage() {
         }
         return;
       }
-      const { error } = await supabase.from("user_roles").delete().in("user_id", ids).eq("role", "admin");
+      const { error } = await supabase
+        .from("user_roles")
+        .delete()
+        .in("user_id", ids)
+        .eq("role", "admin");
       if (error) throw error;
     },
     onSuccess: () => {
@@ -187,22 +235,52 @@ function EmployeesPage() {
 
       <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-4">
         <span className="text-sm text-muted-foreground">{checked.length} משתמשים מסומנים</span>
-        <Button size="sm" variant="outline" disabled={!checked.length || bulk.isPending} onClick={() => bulk.mutate("approve")}>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={!checked.length || bulk.isPending}
+          onClick={() => bulk.mutate("approve")}
+        >
           אישור כניסה
         </Button>
-        <Button size="sm" variant="outline" disabled={!checked.length || bulk.isPending} onClick={() => bulk.mutate("admin")}>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={!checked.length || bulk.isPending}
+          onClick={() => bulk.mutate("admin")}
+        >
           מתן הרשאת מנהל
         </Button>
-        <Button size="sm" variant="outline" disabled={!checked.length || bulk.isPending} onClick={() => bulk.mutate("unadmin")}>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={!checked.length || bulk.isPending}
+          onClick={() => bulk.mutate("unadmin")}
+        >
           הסרת הרשאת מנהל
         </Button>
-        <Button size="sm" variant="outline" disabled={!checked.length || bulk.isPending} onClick={() => bulk.mutate("activate")}>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={!checked.length || bulk.isPending}
+          onClick={() => bulk.mutate("activate")}
+        >
           הפעלה
         </Button>
-        <Button size="sm" variant="outline" disabled={!checked.length || bulk.isPending} onClick={() => bulk.mutate("deactivate")}>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={!checked.length || bulk.isPending}
+          onClick={() => bulk.mutate("deactivate")}
+        >
           השבתה
         </Button>
-        <Button size="sm" variant="destructive" disabled={!checked.length || bulk.isPending} onClick={() => setBulkDelete(true)}>
+        <Button
+          size="sm"
+          variant="destructive"
+          disabled={!checked.length || bulk.isPending}
+          onClick={() => setBulkDelete(true)}
+        >
           <Trash2 className="size-4" />
           מחיקת המסומנים
         </Button>
@@ -242,16 +320,39 @@ function EmployeesPage() {
                   onChange={() => setChecked(allChecked ? [] : profiles.map((p) => p.id))}
                 />
               </th>
-              <th scope="col" className="p-3 text-start">שם</th>
-              <th scope="col" className="p-3 text-start">דוא״ל</th>
-              <th scope="col" className="p-3 text-start">פרטים מזהים</th>
-              <th scope="col" className="p-3 text-start">אישור כניסה</th>
-              <th scope="col" className="p-3 text-start">תעריף עלות למשרד (₪/שעה)</th>
-              <th scope="col" className="p-3 text-start">שכר שעתי שהוזן ע״י העובד</th>
-              <th scope="col" className="p-3 text-start">הרשאת מנהל</th>
-              <th scope="col" className="p-3 text-start">פעיל</th>
-              <th scope="col" className="p-3 text-start">סיסמה</th>
-              <th scope="col" className="p-3 text-start">הסרת גישה</th>
+              <th scope="col" className="p-3 text-start">
+                שם
+              </th>
+              <th scope="col" className="p-3 text-start">
+                דוא״ל
+              </th>
+              <th scope="col" className="p-3 text-start">
+                פרטים מזהים
+              </th>
+              <th scope="col" className="p-3 text-start">
+                אישור כניסה
+              </th>
+              <th scope="col" className="p-3 text-start">
+                תעריף עלות למשרד (₪/שעה)
+              </th>
+              <th scope="col" className="p-3 text-start">
+                ותק ומכסת חופשה
+              </th>
+              <th scope="col" className="p-3 text-start">
+                שכר שעתי שהוזן ע״י העובד
+              </th>
+              <th scope="col" className="p-3 text-start">
+                הרשאת מנהל
+              </th>
+              <th scope="col" className="p-3 text-start">
+                פעיל
+              </th>
+              <th scope="col" className="p-3 text-start">
+                סיסמה
+              </th>
+              <th scope="col" className="p-3 text-start">
+                הסרת גישה
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -294,7 +395,7 @@ function EmployeesPage() {
                       type="number"
                       min="0"
                       aria-label={`תעריף עלות עבור ${p.full_name || p.email}`}
-                      value={rates[p.id] ?? (p.cost_rate ?? "")}
+                      value={rates[p.id] ?? p.cost_rate ?? ""}
                       onChange={(e) => setRates({ ...rates, [p.id]: e.target.value })}
                     />
                     <Button
@@ -303,13 +404,66 @@ function EmployeesPage() {
                       onClick={() =>
                         setCost.mutate({
                           userId: p.id,
-                          value: rates[p.id] === "" ? null : Number(rates[p.id] ?? p.cost_rate ?? 0),
+                          value:
+                            rates[p.id] === "" ? null : Number(rates[p.id] ?? p.cost_rate ?? 0),
                         })
                       }
                     >
                       שמירה
                     </Button>
                   </div>
+                </td>
+                <td className="p-3">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      className="w-36"
+                      type="date"
+                      aria-label={`תאריך תחילת עבודה עבור ${p.full_name || p.email}`}
+                      value={hr[p.id]?.hire ?? p.hire_date ?? ""}
+                      onChange={(e) =>
+                        setHr({
+                          ...hr,
+                          [p.id]: {
+                            hire: e.target.value,
+                            quota: hr[p.id]?.quota ?? String(p.vacation_quota ?? 12),
+                          },
+                        })
+                      }
+                    />
+                    <Input
+                      className="w-20"
+                      type="number"
+                      min="0"
+                      aria-label={`מכסת חופשה שנתית עבור ${p.full_name || p.email}`}
+                      title="מכסת ימי חופשה שנתית"
+                      value={hr[p.id]?.quota ?? String(p.vacation_quota ?? 12)}
+                      onChange={(e) =>
+                        setHr({
+                          ...hr,
+                          [p.id]: {
+                            hire: hr[p.id]?.hire ?? p.hire_date ?? "",
+                            quota: e.target.value,
+                          },
+                        })
+                      }
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        saveHr.mutate({
+                          userId: p.id,
+                          hire: hr[p.id]?.hire ?? p.hire_date ?? "",
+                          quota: hr[p.id]?.quota ?? String(p.vacation_quota ?? 12),
+                        })
+                      }
+                    >
+                      שמירה
+                    </Button>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    תאריך תחילת עבודה · ימי חופשה בשנה
+                  </p>
                 </td>
                 <td className="p-3">{p.hourly_rate ? fmtMoney(Number(p.hourly_rate)) : "—"}</td>
                 <td className="p-3">
@@ -386,9 +540,8 @@ function DeleteUserButton({
         <AlertDialogHeader>
           <AlertDialogTitle>מחיקת המשתמש {name}</AlertDialogTitle>
           <AlertDialogDescription>
-            האם אתה בטוח? המשתמש לא יוכל עוד להתחבר למערכת ויוסרו הרשאותיו. כל הנתונים
-            ההיסטוריים – דוחות שעות, שעות עבודה בפרויקטים וכל דיווח קודם – יישמרו במלואם
-            לצורכי דיווח וניתוח.
+            האם אתה בטוח? המשתמש לא יוכל עוד להתחבר למערכת ויוסרו הרשאותיו. כל הנתונים ההיסטוריים –
+            דוחות שעות, שעות עבודה בפרויקטים וכל דיווח קודם – יישמרו במלואם לצורכי דיווח וניתוח.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -435,10 +588,15 @@ function ResetPasswordDialogInner({ userId, name }: { userId: string; name: stri
         </DialogHeader>
         <div className="space-y-2">
           <Label htmlFor={`rp-${userId}`}>סיסמה זמנית (8 תווים לפחות)</Label>
-          <Input id={`rp-${userId}`} type="text" value={pw} onChange={(e) => setPw(e.target.value)} />
+          <Input
+            id={`rp-${userId}`}
+            type="text"
+            value={pw}
+            onChange={(e) => setPw(e.target.value)}
+          />
           <p className="text-xs text-muted-foreground">
-            יש למסור את הסיסמה הזמנית לעובד. בכניסה הבאה הוא יידרש להגדיר סיסמה חדשה משלו לפני
-            שיוכל להשתמש במערכת.
+            יש למסור את הסיסמה הזמנית לעובד. בכניסה הבאה הוא יידרש להגדיר סיסמה חדשה משלו לפני שיוכל
+            להשתמש במערכת.
           </p>
         </div>
         <DialogFooter>
@@ -462,7 +620,9 @@ function NewUserDialogInner({ onCreated }: { onCreated: () => void }) {
   const mut = useMutation({
     mutationFn: async () => {
       if (!form.email.trim() || form.password.length < 8) throw new Error("שדות חסרים");
-      await create({ data: { ...form, email: form.email.trim(), full_name: form.full_name.trim() } });
+      await create({
+        data: { ...form, email: form.email.trim(), full_name: form.full_name.trim() },
+      });
     },
     onSuccess: () => {
       toast.success("המשתמש נוצר בהצלחה");

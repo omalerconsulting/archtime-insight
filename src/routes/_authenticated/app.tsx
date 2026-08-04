@@ -1,7 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Coffee, LogIn, LogOut, Plus, Play, Save, Trash2 } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Coffee,
+  LogIn,
+  LogOut,
+  Plus,
+  Play,
+  Save,
+  Send,
+  Square,
+  Timer,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -11,6 +24,7 @@ import {
   ABSENCE_TYPES,
   absenceLabel,
   computeHours,
+  elapsedLabel,
   fmtDate,
   fmtHours,
   durationToHours,
@@ -21,17 +35,20 @@ import {
   iso,
   maskDurationInput,
   maskTimeInput,
+  monthFirstIso,
   monthRange,
   MONTH_NAMES,
   normalizeTime,
   nowTime,
   periodLockDate,
   REPORT_LOCK_DAYS,
+  REPORT_STATUS_LABELS,
   todayIso,
   weekdayOf,
   yearOptions,
 } from "@/lib/time";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { ProjectPicker } from "@/components/ProjectPicker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,6 +60,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import {
   Select,
   SelectContent,
@@ -66,7 +94,7 @@ export const Route = createFileRoute("/_authenticated/app")({
 /** `hours` is kept as an "HH:MM" duration string in the form. */
 type DayRow = { project_id: string; hours: string; description: string; id?: string };
 
-/** 24h text field, always normalized to HH:MM:SS. */
+/** 24h text field, normalized to HH:MM. */
 function TimeField({
   id,
   value,
@@ -84,7 +112,7 @@ function TimeField({
       inputMode="numeric"
       dir="ltr"
       className="text-center tabular-nums"
-      placeholder="HH:MM:SS"
+      placeholder="HH:MM"
       value={value}
       onChange={(e) => onChange(maskTimeInput(e.target.value))}
       onBlur={(e) => onChange(normalizeTime(e.target.value))}
@@ -92,8 +120,6 @@ function TimeField({
     />
   );
 }
-
-const breakKey = (userId: string, date: string) => `break-start:${userId}:${date}`;
 
 type ManualMeta = {
   manually_edited: boolean;
@@ -128,6 +154,15 @@ function minutesBetween(from: string, to: string) {
   return Math.max(0, Math.round(sec / 60));
 }
 
+/** Re-render every 30s so the live clock/timer labels stay fresh. */
+function useTick() {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTick((n) => n + 1), 30000);
+    return () => clearInterval(t);
+  }, []);
+}
+
 function TimesheetPage() {
   const { user, isAdmin } = useAuth();
   const qc = useQueryClient();
@@ -135,11 +170,12 @@ function TimesheetPage() {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
   const [editDate, setEditDate] = useState<string | null>(null);
+  useTick();
 
   const range = useMemo(() => monthRange(year, month), [year, month]);
   const userId = user?.id ?? "";
-  const monthLocked = isPeriodLocked(year, month, isAdmin);
   const lockDeadline = periodLockDate(year, month);
+  const monthFirst = monthFirstIso(year, month);
 
   const projectsQ = useQuery({ queryKey: ["projects-dir"], queryFn: fetchProjectDirectory });
   const monthQ = useQuery({
@@ -147,6 +183,37 @@ function TimesheetPage() {
     queryFn: () => fetchMonthEntries(userId, range.start, range.end),
     enabled: Boolean(userId),
   });
+  const reportQ = useQuery({
+    queryKey: ["monthly-report", userId, monthFirst],
+    enabled: Boolean(userId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("monthly_reports")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("month", monthFirst)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+  const timerQ = useQuery({
+    queryKey: ["active-timer", userId],
+    enabled: Boolean(userId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("active_timers")
+        .select("*")
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const reportStatus = reportQ.data?.status ?? null;
+  const submittedLock = reportStatus === "submitted" || reportStatus === "approved";
+  const monthLocked = isPeriodLocked(year, month, isAdmin) || (!isAdmin && submittedLock);
 
   const days = useMemo(() => {
     const list: string[] = [];
@@ -177,11 +244,28 @@ function TimesheetPage() {
     days.forEach((d) => {
       const e = entryByDate.get(d);
       if (e?.absence_type) absences += 1;
-      attendance += computeHours(trimTime(e?.clock_in ?? null), trimTime(e?.clock_out ?? null), e?.break_minutes ?? 0);
+      attendance += computeHours(
+        trimTime(e?.clock_in ?? null),
+        trimTime(e?.clock_out ?? null),
+        e?.break_minutes ?? 0,
+      );
       projects += hoursByDate.get(d) ?? 0;
     });
     return { attendance, projects, absences };
   }, [days, entryByDate, hoursByDate]);
+
+  /** Past working days with a clock-in but no clock-out and no absence. */
+  const missingOut = useMemo(() => {
+    const today = todayIso();
+    return days.filter((d) => {
+      if (d >= today) return false;
+      const e = entryByDate.get(d);
+      return Boolean(e?.clock_in) && !e?.clock_out && !e?.absence_type;
+    });
+  }, [days, entryByDate]);
+
+  const todayEntry = entryByDate.get(todayIso());
+  const onBreak = Boolean(todayEntry?.break_start);
 
   const clockMutation = useMutation({
     mutationFn: async (kind: "in" | "out" | "break-start" | "break-end") => {
@@ -191,20 +275,28 @@ function TimesheetPage() {
         clock_in?: string;
         clock_out?: string;
         break_minutes?: number;
+        break_start?: string | null;
       } = {};
       if (kind === "in") payload = { clock_in: nowTime() };
-      else if (kind === "out") payload = { clock_out: nowTime() };
-      else if (kind === "break-start") {
-        localStorage.setItem(breakKey(userId, date), nowTime());
-        setBreakStart(nowTime());
-        return;
+      else if (kind === "out") {
+        payload = { clock_out: nowTime() };
+        // Close a forgotten open break on clock-out
+        if (existing?.break_start) {
+          payload.break_minutes =
+            (existing.break_minutes ?? 0) +
+            minutesBetween(trimTime(existing.break_start), nowTime());
+          payload.break_start = null;
+        }
+      } else if (kind === "break-start") {
+        payload = { break_start: nowTime() };
       } else {
-        const start = localStorage.getItem(breakKey(userId, date));
+        const start = existing?.break_start;
         if (!start) throw new Error("no-break");
-        const added = minutesBetween(start, nowTime());
-        localStorage.removeItem(breakKey(userId, date));
-        setBreakStart(null);
-        payload = { break_minutes: (existing?.break_minutes ?? 0) + added };
+        payload = {
+          break_minutes:
+            (existing?.break_minutes ?? 0) + minutesBetween(trimTime(start), nowTime()),
+          break_start: null,
+        };
       }
       if (existing) {
         const { error } = await supabase.from("time_entries").update(payload).eq("id", existing.id);
@@ -231,50 +323,109 @@ function TimesheetPage() {
     onError: () => toast.error("שמירת הדיווח נכשלה"),
   });
 
-  const todayEntry = entryByDate.get(todayIso());
-  const [breakStart, setBreakStart] = useState<string | null>(() =>
-    typeof window === "undefined" ? null : localStorage.getItem(breakKey(user?.id ?? "", todayIso())),
-  );
-
-  const [manual, setManual] = useState({ date: todayIso(), in: "", out: "", brk: "0" });
-  const manualSave = useMutation({
-    mutationFn: async () => {
-      if (!manual.date || (!manual.in && !manual.out)) throw new Error("missing");
-      if (isDateLocked(manual.date, isAdmin)) throw new Error("locked");
-      const existing = entryByDate.get(manual.date);
-      const payload = {
-        clock_in: normalizeTime(manual.in) || null,
-        clock_out: normalizeTime(manual.out) || null,
-        break_minutes: Number(manual.brk) || 0,
-        ...(isAdmin ? {} : manualMeta(existing)),
-      };
-      if (existing) {
-        const { error } = await supabase.from("time_entries").update(payload).eq("id", existing.id);
+  const timerMutation = useMutation({
+    mutationFn: async (arg: { action: "start"; projectId: string } | { action: "stop" }) => {
+      if (arg.action === "start") {
+        const { error } = await supabase.from("active_timers").upsert({
+          user_id: userId,
+          project_id: arg.projectId,
+          started_at: new Date().toISOString(),
+        });
         if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from("time_entries")
-          .insert({ user_id: userId, work_date: manual.date, ...payload });
-        if (error) throw error;
+        return null;
       }
+      const t = timerQ.data;
+      if (!t) return null;
+      const hours =
+        Math.round(((Date.now() - new Date(t.started_at).getTime()) / 3600000) * 100) / 100;
+      if (hours >= 0.02) {
+        const { error: insErr } = await supabase.from("project_hours").insert({
+          user_id: userId,
+          project_id: t.project_id,
+          work_date: todayIso(),
+          hours,
+          description: "טיימר",
+        });
+        if (insErr) throw insErr;
+      }
+      const { error } = await supabase.from("active_timers").delete().eq("user_id", userId);
+      if (error) throw error;
+      return hours;
     },
-    onSuccess: () => {
-      toast.success("השעות נשמרו");
+    onSuccess: (hours, arg) => {
+      if (arg.action === "start") toast.success("הטיימר הופעל");
+      else
+        toast.success(
+          hours && hours >= 0.02
+            ? `הטיימר נעצר – נרשמו ${hoursToDuration(hours)} שעות לפרויקט`
+            : "הטיימר נעצר (פחות מדקה – לא נרשם)",
+        );
+      qc.invalidateQueries({ queryKey: ["active-timer"] });
       qc.invalidateQueries({ queryKey: ["month"] });
     },
-    onError: (e: Error) =>
-      toast.error(
-        e.message === "locked"
-          ? `תקופת הדיווח נעולה – ניתן היה לעדכן עד ${fmtDate(periodLockDate(Number(manual.date.slice(0, 4)), Number(manual.date.slice(5, 7)) - 1))}. יש לפנות למנהל.`
-          : "הזנת השעות נכשלה – יש למלא תאריך ולפחות שעת כניסה או יציאה",
-      ),
+    onError: () => toast.error("פעולת הטיימר נכשלה"),
   });
+
+  const submitMonth = useMutation({
+    mutationFn: async () => {
+      const payload = {
+        user_id: userId,
+        month: monthFirst,
+        status: "submitted",
+        submitted_at: new Date().toISOString(),
+        decided_at: null,
+        decided_by: null,
+      };
+      const { error } = await supabase
+        .from("monthly_reports")
+        .upsert(payload, { onConflict: "user_id,month" });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("הדוח החודשי הוגש לאישור המנהל");
+      qc.invalidateQueries({ queryKey: ["monthly-report"] });
+    },
+    onError: () => toast.error("הגשת הדוח נכשלה"),
+  });
+
+  const [timerProject, setTimerProject] = useState("");
+  const activeTimer = timerQ.data;
+  const timerProjectName = activeTimer
+    ? projectsQ.data?.find((p) => p.id === activeTimer.project_id)
+    : null;
+
+  const workedSince =
+    todayEntry?.clock_in && !todayEntry?.clock_out
+      ? elapsedLabel(`${todayIso()}T${trimTime(todayEntry.clock_in)}`)
+      : null;
+
+  const todayRowRef = useRef<HTMLTableRowElement>(null);
+  useEffect(() => {
+    todayRowRef.current?.scrollIntoView({ block: "center" });
+  }, [monthQ.isSuccess]);
+
+  const statusBadge = reportStatus && (
+    <Badge
+      variant={
+        reportStatus === "approved"
+          ? "default"
+          : reportStatus === "returned"
+            ? "destructive"
+            : "secondary"
+      }
+    >
+      {REPORT_STATUS_LABELS[reportStatus] ?? reportStatus}
+    </Badge>
+  );
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">דיווח שעות</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold">דיווח שעות</h1>
+            {statusBadge}
+          </div>
           <p className="text-sm text-muted-foreground">
             שעון נוכחות, היעדרויות ופירוק השעות לפרויקטים
           </p>
@@ -313,6 +464,35 @@ function TimesheetPage() {
         </div>
       </div>
 
+      {missingOut.length > 0 && (
+        <div role="alert" className="rounded-xl border-2 border-warning/60 bg-warning/10 p-4">
+          <p className="font-semibold">
+            <AlertTriangle className="ms-0 me-2 inline size-4 text-warning" aria-hidden />
+            {missingOut.length === 1
+              ? `ביום ${fmtDate(missingOut[0])} נרשמה כניסה ללא יציאה.`
+              : `ב‑${missingOut.length} ימים נרשמה כניסה ללא יציאה.`}{" "}
+            יש להשלים את שעת היציאה כדי שהשעות ייספרו.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {missingOut.slice(0, 5).map((d) => (
+              <Button key={d} size="sm" variant="outline" onClick={() => setEditDate(d)}>
+                השלמת {fmtDate(d)}
+              </Button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {reportStatus === "returned" && reportQ.data?.manager_note && (
+        <div
+          role="alert"
+          className="rounded-xl border-2 border-destructive/50 bg-destructive/10 p-4"
+        >
+          <p className="font-semibold text-destructive">הדוח הוחזר לתיקון על ידי המנהל:</p>
+          <p className="mt-1 text-sm">{reportQ.data.manager_note}</p>
+        </div>
+      )}
+
       <section className="grid gap-4 md:grid-cols-4">
         {monthLocked && (
           <div
@@ -320,27 +500,45 @@ function TimesheetPage() {
             className="rounded-xl border-2 border-destructive/50 bg-destructive/10 p-4 md:col-span-4"
           >
             <p className="text-base font-semibold text-destructive">
-              תקופת הדיווח של {MONTH_NAMES[month]} {year} נעולה לשינויים.
+              {submittedLock
+                ? `הדוח של ${MONTH_NAMES[month]} ${year} הוגש ${reportStatus === "approved" ? "ואושר" : "וממתין לאישור"} – לא ניתן לערוך.`
+                : `תקופת הדיווח של ${MONTH_NAMES[month]} ${year} נעולה לשינויים.`}
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              ניתן היה לעדכן עד {fmtDate(lockDeadline)} ({REPORT_LOCK_DAYS} ימים מתחילת החודש
-              העוקב). לתיקון בדיעבד יש לפנות למנהל.
+              {submittedLock
+                ? "לתיקון יש לבקש מהמנהל להחזיר את הדוח לעריכה."
+                : `ניתן היה לעדכן עד ${fmtDate(lockDeadline)} (${REPORT_LOCK_DAYS} ימים מתחילת החודש העוקב). לתיקון בדיעבד יש לפנות למנהל.`}
             </p>
           </div>
         )}
+
         <div className="rounded-xl border border-border bg-card p-5 md:col-span-2">
           <h2 className="mb-1 text-sm font-medium text-muted-foreground">שעון נוכחות – היום</h2>
-          <p className="mb-4 text-lg font-semibold">
-            {todayEntry?.clock_in ? `כניסה ${trimTime(todayEntry.clock_in)}` : "טרם נרשמה כניסה"}
-            {todayEntry?.clock_out ? ` · יציאה ${trimTime(todayEntry.clock_out)}` : ""}
+          <p className="mb-1 text-lg font-semibold">
+            {todayEntry?.clock_in
+              ? `כניסה ${trimTime(todayEntry.clock_in).slice(0, 5)}`
+              : "טרם נרשמה כניסה"}
+            {todayEntry?.clock_out ? ` · יציאה ${trimTime(todayEntry.clock_out).slice(0, 5)}` : ""}
           </p>
+          {workedSince && (
+            <p className="mb-3 text-sm text-muted-foreground" dir="rtl">
+              בעבודה כבר <span className="font-semibold tabular-nums">{workedSince}</span> שעות
+            </p>
+          )}
           <div className="flex flex-wrap gap-2">
-            <Button onClick={() => clockMutation.mutate("in")} disabled={clockMutation.isPending}>
+            <Button
+              size="lg"
+              className="min-w-28"
+              onClick={() => clockMutation.mutate("in")}
+              disabled={clockMutation.isPending}
+            >
               <LogIn className="size-4" />
               כניסה
             </Button>
             <Button
+              size="lg"
               variant="outline"
+              className="min-w-28"
               onClick={() => clockMutation.mutate("out")}
               disabled={clockMutation.isPending}
             >
@@ -350,7 +548,7 @@ function TimesheetPage() {
             <Button
               variant="outline"
               onClick={() => clockMutation.mutate("break-start")}
-              disabled={clockMutation.isPending || Boolean(breakStart)}
+              disabled={clockMutation.isPending || onBreak}
             >
               <Coffee className="size-4" />
               יציאה להפסקה
@@ -358,17 +556,72 @@ function TimesheetPage() {
             <Button
               variant="outline"
               onClick={() => clockMutation.mutate("break-end")}
-              disabled={clockMutation.isPending || !breakStart}
+              disabled={clockMutation.isPending || !onBreak}
             >
               <Play className="size-4" />
               חזרה מהפסקה
             </Button>
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
-            {breakStart
-              ? `בהפסקה מאז ${breakStart} · סה"כ הפסקות היום: ${todayEntry?.break_minutes ?? 0} דק'`
+            {onBreak
+              ? `בהפסקה מאז ${trimTime(todayEntry?.break_start ?? null).slice(0, 5)} · סה"כ הפסקות היום: ${todayEntry?.break_minutes ?? 0} דק'`
               : `סה"כ הפסקות היום: ${todayEntry?.break_minutes ?? 0} דק'`}
           </p>
+
+          <div className="mt-5 border-t border-border pt-4">
+            <h3 className="mb-2 flex items-center gap-1 text-sm font-medium text-muted-foreground">
+              <Timer className="size-4" aria-hidden />
+              טיימר פרויקט
+            </h3>
+            {activeTimer ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <p className="text-sm">
+                  רץ על{" "}
+                  <span className="font-semibold">
+                    {timerProjectName
+                      ? `${timerProjectName.code} · ${timerProjectName.name}`
+                      : "פרויקט"}
+                  </span>{" "}
+                  ·{" "}
+                  <span className="font-semibold tabular-nums">
+                    {elapsedLabel(activeTimer.started_at)}
+                  </span>
+                </p>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  disabled={timerMutation.isPending}
+                  onClick={() => timerMutation.mutate({ action: "stop" })}
+                >
+                  <Square className="size-4" />
+                  עצירה ורישום
+                </Button>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="min-w-56 flex-1">
+                  <ProjectPicker
+                    projects={projectsQ.data ?? []}
+                    value={timerProject}
+                    onChange={setTimerProject}
+                  />
+                </div>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={!timerProject || timerMutation.isPending || monthLocked}
+                  onClick={() => timerMutation.mutate({ action: "start", projectId: timerProject })}
+                >
+                  <Play className="size-4" />
+                  התחלה
+                </Button>
+              </div>
+            )}
+            <p className="mt-1 text-xs text-muted-foreground">
+              בעצירה הזמן נרשם אוטומטית כשעות פרויקט להיום.
+            </p>
+          </div>
+
           <Button
             size="lg"
             className="mt-4 w-full text-base font-semibold shadow-md"
@@ -376,80 +629,149 @@ function TimesheetPage() {
           >
             עריכת היום ופירוק לפרויקטים
           </Button>
-
-          <div className="mt-5 border-t border-border pt-4">
-            <h3 className="mb-3 text-sm font-medium text-muted-foreground">הזנה ידנית של שעות</h3>
-            <div className="grid gap-2 sm:grid-cols-[1.2fr_1fr_1fr_0.8fr_auto]">
-              <div className="space-y-1">
-                <Label htmlFor="m-date" className="text-xs">תאריך</Label>
-                <Input
-                  id="m-date"
-                  type="date"
-                  value={manual.date}
-                  onChange={(e) => setManual({ ...manual, date: e.target.value })}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="m-in" className="text-xs">כניסה</Label>
-                <TimeField
-                  id="m-in"
-                  value={manual.in}
-                  onChange={(v) => setManual({ ...manual, in: v })}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="m-out" className="text-xs">יציאה</Label>
-                <TimeField
-                  id="m-out"
-                  value={manual.out}
-                  onChange={(v) => setManual({ ...manual, out: v })}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="m-brk" className="text-xs">הפסקה (דק׳)</Label>
-                <Input
-                  id="m-brk"
-                  type="number"
-                  min="0"
-                  value={manual.brk}
-                  onChange={(e) => setManual({ ...manual, brk: e.target.value })}
-                />
-              </div>
-              <div className="flex items-end">
-                <Button
-                  variant="secondary"
-                  onClick={() => manualSave.mutate()}
-                  disabled={manualSave.isPending || isDateLocked(manual.date, isAdmin)}
-                >
-                  שמירה ידנית
-                </Button>
-              </div>
-            </div>
-          </div>
         </div>
+
         <StatCard title="סה״כ שעות נוכחות" value={fmtHours(totals.attendance)} />
-        <StatCard
-          title="שעות משויכות לפרויקטים"
-          value={fmtHours(totals.projects)}
-          warn={Math.abs(totals.attendance - totals.projects) > 0.5}
-        />
+        <div className="flex flex-col gap-4">
+          <StatCard
+            title="שעות משויכות לפרויקטים"
+            value={fmtHours(totals.projects)}
+            warn={Math.abs(totals.attendance - totals.projects) > 0.5}
+          />
+          {!isAdmin && !isPeriodLocked(year, month, isAdmin) && reportStatus !== "approved" && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  className="w-full"
+                  variant={reportStatus === "submitted" ? "outline" : "default"}
+                  disabled={submitMonth.isPending || reportStatus === "submitted"}
+                >
+                  {reportStatus === "submitted" ? (
+                    <>
+                      <CheckCircle2 className="size-4" />
+                      הדוח הוגש
+                    </>
+                  ) : (
+                    <>
+                      <Send className="size-4" />
+                      הגשת דוח {MONTH_NAMES[month]} לאישור
+                    </>
+                  )}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>
+                    הגשת דוח {MONTH_NAMES[month]} {year}
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    לאחר ההגשה לא ניתן יהיה לערוך את הדיווח של החודש עד שהמנהל יאשר או יחזיר לתיקון.
+                    סה״כ שעות נוכחות: {fmtHours(totals.attendance)} · שעות פרויקטים:{" "}
+                    {fmtHours(totals.projects)}.
+                    {missingOut.length > 0 &&
+                      ` שים לב: ${missingOut.length} ימים עם כניסה ללא יציאה.`}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>ביטול</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => submitMonth.mutate()}>
+                    הגשה לאישור
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+        </div>
       </section>
 
-      <section className="overflow-x-auto rounded-xl border border-border bg-card">
+      {/* ===== Mobile: day cards ===== */}
+      <section className="space-y-2 md:hidden">
+        {days.map((d) => {
+          const e = entryByDate.get(d);
+          const attendance = computeHours(
+            trimTime(e?.clock_in ?? null),
+            trimTime(e?.clock_out ?? null),
+            e?.break_minutes ?? 0,
+          );
+          const proj = hoursByDate.get(d) ?? 0;
+          const holiday = holidayFor(d);
+          const isToday = d === todayIso();
+          const missing = missingOut.includes(d);
+          const empty = !e && !holiday && proj === 0;
+          if (empty && d > todayIso()) return null;
+          return (
+            <button
+              key={d}
+              onClick={() => setEditDate(d)}
+              className={`w-full rounded-xl border p-3 text-start ${
+                isToday
+                  ? "border-primary bg-secondary/60"
+                  : holiday?.restDay
+                    ? "holiday-row border-border"
+                    : "border-border bg-card"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-semibold">
+                  {weekdayOf(d)} {d.slice(8)}/{d.slice(5, 7)}
+                  {isToday && <span className="ms-2 text-xs font-normal text-primary">היום</span>}
+                </span>
+                <span className="text-sm tabular-nums">
+                  {attendance
+                    ? fmtHours(attendance)
+                    : e?.absence_type
+                      ? absenceLabel(e.absence_type)
+                      : "—"}
+                </span>
+              </div>
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                {e?.clock_in && <span>כניסה {trimTime(e.clock_in).slice(0, 5)}</span>}
+                {e?.clock_out && <span>יציאה {trimTime(e.clock_out).slice(0, 5)}</span>}
+                {missing && <span className="font-semibold text-destructive">חסרה יציאה</span>}
+                {proj > 0 && <span>פרויקטים {hoursToDuration(proj)}</span>}
+                {holiday && <span>{holiday.name}</span>}
+              </div>
+            </button>
+          );
+        })}
+      </section>
+
+      {/* ===== Desktop: monthly table ===== */}
+      <section className="hidden overflow-x-auto rounded-xl border border-border bg-card md:block">
         <table className="w-full text-sm">
           <caption className="sr-only">טבלת דיווח חודשי</caption>
           <thead className="bg-muted/60 text-start">
             <tr>
-              <th scope="col" className="p-3 text-start">תאריך</th>
-              <th scope="col" className="p-3 text-start">יום</th>
-              <th scope="col" className="p-3 text-start">כניסה</th>
-              <th scope="col" className="p-3 text-start">יציאה</th>
-              <th scope="col" className="p-3 text-start">הפסקה (דק׳)</th>
-              <th scope="col" className="p-3 text-start">שעות נוכחות</th>
-              <th scope="col" className="p-3 text-start">שעות פרויקטים</th>
-              <th scope="col" className="p-3 text-start">היעדרות</th>
-              <th scope="col" className="p-3 text-start">הערות</th>
-              <th scope="col" className="p-3 text-start">פעולה</th>
+              <th scope="col" className="p-3 text-start">
+                תאריך
+              </th>
+              <th scope="col" className="p-3 text-start">
+                יום
+              </th>
+              <th scope="col" className="p-3 text-start">
+                כניסה
+              </th>
+              <th scope="col" className="p-3 text-start">
+                יציאה
+              </th>
+              <th scope="col" className="p-3 text-start">
+                הפסקה (דק׳)
+              </th>
+              <th scope="col" className="p-3 text-start">
+                שעות נוכחות
+              </th>
+              <th scope="col" className="p-3 text-start">
+                שעות פרויקטים
+              </th>
+              <th scope="col" className="p-3 text-start">
+                היעדרות
+              </th>
+              <th scope="col" className="p-3 text-start">
+                הערות
+              </th>
+              <th scope="col" className="p-3 text-start">
+                פעולה
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -464,29 +786,59 @@ function TimesheetPage() {
               const mismatch = attendance > 0 && hoursGap(attendance, proj) > 0.5;
               const weekend = ["שישי", "שבת"].includes(weekdayOf(d));
               const holiday = holidayFor(d);
+              const isToday = d === todayIso();
+              const missing = missingOut.includes(d);
               return (
                 <tr
                   key={d}
+                  ref={isToday ? todayRowRef : undefined}
                   className={`border-t border-border ${
-                    holiday?.restDay ? "holiday-row" : weekend ? "bg-muted/30" : ""
+                    isToday
+                      ? "bg-secondary/70 ring-1 ring-inset ring-primary/30"
+                      : holiday?.restDay
+                        ? "holiday-row"
+                        : weekend
+                          ? "bg-muted/30"
+                          : ""
                   }`}
                 >
-                  <td className="p-3">{d.slice(8)}/{d.slice(5, 7)}</td>
+                  <td className="p-3 tabular-nums">
+                    {d.slice(8)}/{d.slice(5, 7)}
+                    {isToday && (
+                      <span className="ms-2 text-xs font-semibold text-primary">היום</span>
+                    )}
+                  </td>
                   <td className="p-3">{weekdayOf(d)}</td>
-                  <td className={`p-3 ${e?.manually_edited ? "font-semibold text-destructive" : ""}`}>
-                    {trimTime(e?.clock_in ?? null) || "—"}
+                  <td
+                    className={`p-3 tabular-nums ${e?.manually_edited ? "font-semibold text-destructive" : ""}`}
+                  >
+                    {trimTime(e?.clock_in ?? null).slice(0, 5) || "—"}
                   </td>
-                  <td className={`p-3 ${e?.manually_edited ? "font-semibold text-destructive" : ""}`}>
-                    {trimTime(e?.clock_out ?? null) || "—"}
+                  <td
+                    className={`p-3 tabular-nums ${e?.manually_edited ? "font-semibold text-destructive" : ""}`}
+                  >
+                    {trimTime(e?.clock_out ?? null).slice(0, 5) ||
+                      (missing ? (
+                        <span className="font-semibold text-destructive">חסרה</span>
+                      ) : (
+                        "—"
+                      ))}
                   </td>
-                  <td className={`p-3 ${e?.manually_edited ? "font-semibold text-destructive" : ""}`}>
+                  <td
+                    className={`p-3 tabular-nums ${e?.manually_edited ? "font-semibold text-destructive" : ""}`}
+                  >
                     {e?.break_minutes ?? 0}
                   </td>
-                  <td className="p-3 font-medium">{attendance ? fmtHours(attendance) : "—"}</td>
-                  <td className={`p-3 ${mismatch ? "text-destructive" : ""}`}>
+                  <td className="p-3 font-medium tabular-nums">
+                    {attendance ? fmtHours(attendance) : "—"}
+                  </td>
+                  <td className={`p-3 tabular-nums ${mismatch ? "text-destructive" : ""}`}>
                     {proj ? hoursToDuration(proj) : "—"}
                     {mismatch && (
-                      <AlertTriangle className="ms-1 inline size-3.5" aria-label="פער בין נוכחות לשעות פרויקט" />
+                      <AlertTriangle
+                        className="ms-1 inline size-3.5"
+                        aria-label="פער בין נוכחות לשעות פרויקט"
+                      />
                     )}
                   </td>
                   <td className="p-3">{absenceLabel(e?.absence_type) || "—"}</td>
@@ -520,7 +872,7 @@ function TimesheetPage() {
           date={editDate}
           userId={userId}
           projects={projectsQ.data ?? []}
-          locked={isDateLocked(editDate, isAdmin)}
+          locked={isDateLocked(editDate, isAdmin) || (!isAdmin && submittedLock)}
           onClose={() => setEditDate(null)}
         />
       )}
@@ -532,7 +884,9 @@ function StatCard({ title, value, warn }: { title: string; value: string; warn?:
   return (
     <div className="rounded-xl border border-border bg-card p-5">
       <h2 className="text-sm font-medium text-muted-foreground">{title}</h2>
-      <p className={`mt-2 text-2xl font-bold ${warn ? "text-destructive" : ""}`}>{value}</p>
+      <p className={`mt-2 text-2xl font-bold tabular-nums ${warn ? "text-destructive" : ""}`}>
+        {value}
+      </p>
       {warn && <p className="mt-1 text-xs text-destructive">קיים פער מול שעות הנוכחות</p>}
     </div>
   );
@@ -578,10 +932,12 @@ function DayEditor({
   } | null>(null);
   const [rows, setRows] = useState<DayRow[] | null>(null);
 
-  if (dayQ.data && form === null) {
+  // Initialize the form once the day query resolves (proper effect, not render-time setState).
+  useEffect(() => {
+    if (!dayQ.data) return;
     setForm({
-      clock_in: trimTime(dayQ.data.entry?.clock_in ?? null),
-      clock_out: trimTime(dayQ.data.entry?.clock_out ?? null),
+      clock_in: trimTime(dayQ.data.entry?.clock_in ?? null).slice(0, 5),
+      clock_out: trimTime(dayQ.data.entry?.clock_out ?? null).slice(0, 5),
       break_minutes: String(dayQ.data.entry?.break_minutes ?? 0),
       absence_type: dayQ.data.entry?.absence_type ?? "none",
       note: dayQ.data.entry?.note ?? "",
@@ -594,7 +950,7 @@ function DayEditor({
         description: h.description ?? "",
       })),
     );
-  }
+  }, [dayQ.data]);
 
   const save = useMutation({
     mutationFn: async () => {
@@ -655,7 +1011,9 @@ function DayEditor({
       ),
   });
 
-  const attendance = form ? computeHours(form.clock_in, form.clock_out, Number(form.break_minutes) || 0) : 0;
+  const attendance = form
+    ? computeHours(form.clock_in, form.clock_out, Number(form.break_minutes) || 0)
+    : 0;
   const projectTotal = (rows ?? []).reduce((s, r) => s + durationToHours(r.hours), 0);
 
   return (
@@ -676,52 +1034,60 @@ function DayEditor({
             )}
             <div className="grid gap-4 sm:grid-cols-4">
               <fieldset disabled={locked} className="contents">
-              <div className="space-y-2">
-                <Label htmlFor="ci">שעת כניסה</Label>
-                <TimeField
-                  id="ci"
-                  value={form.clock_in}
-                  onChange={(v) => setForm({ ...form, clock_in: v })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="co">שעת יציאה</Label>
-                <TimeField
-                  id="co"
-                  value={form.clock_out}
-                  onChange={(v) => setForm({ ...form, clock_out: v })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="br">הפסקה (דקות)</Label>
-                <Input
-                  id="br"
-                  type="number"
-                  min={0}
-                  value={form.break_minutes}
-                  onChange={(e) => setForm({ ...form, break_minutes: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="ab">היעדרות</Label>
-                <Select
-                  value={form.absence_type}
-                  onValueChange={(v) => setForm({ ...form, absence_type: v })}
-                  disabled={locked}
-                >
-                  <SelectTrigger id="ab">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">ללא</SelectItem>
-                    {ABSENCE_TYPES.map((a) => (
-                      <SelectItem key={a.value} value={a.value}>
-                        {a.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                <div className="space-y-2">
+                  <Label htmlFor="ci">שעת כניסה</Label>
+                  <TimeField
+                    id="ci"
+                    value={form.clock_in}
+                    onChange={(v) => setForm({ ...form, clock_in: v })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="co">שעת יציאה</Label>
+                  <TimeField
+                    id="co"
+                    value={form.clock_out}
+                    onChange={(v) => setForm({ ...form, clock_out: v })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="br">הפסקה (דקות)</Label>
+                  <Input
+                    id="br"
+                    type="number"
+                    min={0}
+                    value={form.break_minutes}
+                    onChange={(e) => setForm({ ...form, break_minutes: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="ab">היעדרות</Label>
+                  <Select
+                    value={form.absence_type}
+                    onValueChange={(v) => setForm({ ...form, absence_type: v })}
+                    disabled={locked}
+                  >
+                    <SelectTrigger id="ab">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">ללא</SelectItem>
+                      {ABSENCE_TYPES.map((a) => (
+                        <SelectItem key={a.value} value={a.value}>
+                          {a.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {form.absence_type === "choice_day" && (
+                    <p className="text-xs text-muted-foreground">
+                      יום בחירה: על פי חוק חופשה שנתית, עובד רשאי לבחור יום חופשה אחד בשנה באחד
+                      מהמועדים הקבועים בתוספת לחוק (למשל צום גדליה, ערב יום כיפור, פורים, יום
+                      הזיכרון, ל״ג בעומר, ט׳ באב, ערבי חג ועוד), בהודעה למעסיק 30 ימים מראש. היום
+                      מנוכה ממכסת החופשה השנתית.
+                    </p>
+                  )}
+                </div>
               </fieldset>
             </div>
 
@@ -743,9 +1109,7 @@ function DayEditor({
                   size="sm"
                   variant="outline"
                   disabled={locked}
-                  onClick={() =>
-                    setRows([...rows, { project_id: "", hours: "", description: "" }])
-                  }
+                  onClick={() => setRows([...rows, { project_id: "", hours: "", description: "" }])}
                 >
                   <Plus className="size-4" />
                   הוספת שורה
@@ -821,7 +1185,8 @@ function DayEditor({
                     : "text-muted-foreground"
                 }`}
               >
-                שעות נוכחות: {hoursToDuration(attendance)} · שעות פרויקטים: {hoursToDuration(projectTotal)}
+                שעות נוכחות: {hoursToDuration(attendance)} · שעות פרויקטים:{" "}
+                {hoursToDuration(projectTotal)}
               </p>
             </div>
           </div>
@@ -832,10 +1197,10 @@ function DayEditor({
             {locked ? "סגירה" : "ביטול"}
           </Button>
           {!locked && (
-          <Button onClick={() => save.mutate()} disabled={save.isPending}>
-            <Save className="size-4" />
-            שמירה
-          </Button>
+            <Button onClick={() => save.mutate()} disabled={save.isPending}>
+              <Save className="size-4" />
+              שמירה
+            </Button>
           )}
         </DialogFooter>
       </DialogContent>

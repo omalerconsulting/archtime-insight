@@ -21,6 +21,7 @@ export type TimeEntry = {
   clock_in: string | null;
   clock_out: string | null;
   break_minutes: number;
+  break_start?: string | null;
   absence_type: string | null;
   note: string | null;
   manually_edited?: boolean | null;

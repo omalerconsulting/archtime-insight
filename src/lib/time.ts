@@ -140,7 +140,12 @@ export function normalizeTime(value: string): string {
     s = 0;
   } else {
     h = Number(digits.slice(0, digits.length - 4 > 0 ? 2 : digits.length - 2));
-    m = Number(digits.slice(digits.length - 4 > 0 ? 2 : digits.length - 2, digits.length - 4 > 0 ? 4 : digits.length));
+    m = Number(
+      digits.slice(
+        digits.length - 4 > 0 ? 2 : digits.length - 2,
+        digits.length - 4 > 0 ? 4 : digits.length,
+      ),
+    );
     s = digits.length > 4 ? Number(digits.slice(4, 6)) : 0;
   }
   if (!Number.isFinite(h) || !Number.isFinite(m) || !Number.isFinite(s)) return "";
@@ -156,12 +161,11 @@ export function fmtHours(n: number) {
   });
 }
 
-/** Progressive 24h mask: typing digits auto-inserts ":" → HH:MM:SS. */
+/** Progressive 24h mask: typing digits auto-inserts ":" → HH:MM (seconds dropped from the UI). */
 export function maskTimeInput(value: string): string {
-  const d = (value ?? "").replace(/\D/g, "").slice(0, 6);
+  const d = (value ?? "").replace(/\D/g, "").slice(0, 4);
   if (d.length <= 2) return d;
-  if (d.length <= 4) return `${d.slice(0, 2)}:${d.slice(2)}`;
-  return `${d.slice(0, 2)}:${d.slice(2, 4)}:${d.slice(4)}`;
+  return `${d.slice(0, 2)}:${d.slice(2)}`;
 }
 
 /** Progressive duration mask: digits auto-insert ":" → HH:MM. */
@@ -195,7 +199,11 @@ export function hoursGap(a: number, b: number): number {
 }
 
 export function fmtMoney(n: number) {
-  return n.toLocaleString("he-IL", { style: "currency", currency: "ILS", maximumFractionDigits: 0 });
+  return n.toLocaleString("he-IL", {
+    style: "currency",
+    currency: "ILS",
+    maximumFractionDigits: 0,
+  });
 }
 
 export function fmtDate(d: string) {
@@ -214,10 +222,31 @@ export function daysBetween(fromIso: string, toIso: string) {
 }
 
 /** Milestone value in shekels given the project total fee. */
-export function milestoneAmount(
-  amountType: string,
-  amountValue: number,
-  feeTotal: number,
-): number {
+export function milestoneAmount(amountType: string, amountValue: number, feeTotal: number): number {
   return amountType === "percent" ? (feeTotal * amountValue) / 100 : amountValue;
+}
+/** First day of the month of a date, as ISO. */
+export function monthFirstIso(year: number, month: number) {
+  return `${year}-${String(month + 1).padStart(2, "0")}-01`;
+}
+
+export const REPORT_STATUS_LABELS: Record<string, string> = {
+  submitted: "הוגש – ממתין לאישור",
+  approved: "אושר",
+  returned: "הוחזר לתיקון",
+};
+
+/** Sick-day accrual per Israeli law: 1.5 days per month of employment, capped at 90. */
+export function sickAccrued(hireDateIso: string | null | undefined, today = todayIso()) {
+  if (!hireDateIso) return null;
+  const [hy, hm] = hireDateIso.split("-").map(Number);
+  const [ty, tm] = today.split("-").map(Number);
+  const months = Math.max(0, (ty - hy) * 12 + (tm - hm));
+  return Math.min(90, months * 1.5);
+}
+
+/** Display "HH:MM" elapsed time between an ISO timestamp and now. */
+export function elapsedLabel(sinceIso: string, now = Date.now()) {
+  const mins = Math.max(0, Math.floor((now - new Date(sinceIso).getTime()) / 60000));
+  return `${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
 }

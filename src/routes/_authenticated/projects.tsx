@@ -1,10 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, Download, Plus, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminOnly } from "@/components/AdminOnly";
+import { exportCsv, parseCsv } from "@/lib/csv";
 import {
   daysBetween,
   fmtDate,
@@ -129,10 +130,40 @@ function ProjectsPage() {
         <div>
           <h1 className="text-2xl font-bold">ניהול פרויקטים</h1>
           <p className="text-sm text-muted-foreground">
-            מוצגים {projects.length} מתוך {allProjects.length} פרויקטים · קוד, שכר טרחה, תנאי תשלום ולוחות זמנים
+            מוצגים {projects.length} מתוך {allProjects.length} פרויקטים · קוד, שכר טרחה, תנאי תשלום
+            ולוחות זמנים
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            onClick={() =>
+              exportCsv(
+                "projects",
+                ["קוד", "שם", "לקוח", "סטטוס", "שכר טרחה", "תקציב שעות", "תאריך התחלה", "הערות"],
+                allProjects.map((p) => [
+                  p.code,
+                  p.name,
+                  p.client_name ?? "",
+                  p.status,
+                  Number(p.fee_total) || 0,
+                  p.hours_budget ?? "",
+                  p.start_date ?? "",
+                  p.notes ?? "",
+                ]),
+              )
+            }
+          >
+            <Download className="size-4" />
+            ייצוא
+          </Button>
+          <ImportCsvDialog
+            existingCodes={allProjects.map((p) => p.code)}
+            onDone={() => {
+              qc.invalidateQueries({ queryKey: ["projects-full"] });
+              qc.invalidateQueries({ queryKey: ["projects-dir"] });
+            }}
+          />
           <Button variant="outline" onClick={() => window.print()}>
             הדפסת רשימה
           </Button>
@@ -167,11 +198,7 @@ function ProjectsPage() {
             <Button variant="outline" size="sm" onClick={() => setChecked([])}>
               ניקוי סימון
             </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => setPendingDelete(checked)}
-            >
+            <Button variant="destructive" size="sm" onClick={() => setPendingDelete(checked)}>
               <Trash2 className="size-4" />
               מחיקת המסומנים
             </Button>
@@ -195,23 +222,47 @@ function ProjectsPage() {
                   }
                 />
               </th>
-              <th scope="col" className="p-3 text-start">קוד</th>
-              <th scope="col" className="p-3 text-start">שם הפרויקט</th>
-              <th scope="col" className="p-3 text-start">לקוח</th>
-              <th scope="col" className="p-3 text-start">שכר טרחה</th>
-              <th scope="col" className="p-3 text-start">שולם</th>
-              <th scope="col" className="p-3 text-start">יתרה לגבייה</th>
-              <th scope="col" className="p-3 text-start">שלב נוכחי</th>
-              <th scope="col" className="p-3 text-start">סטטוס</th>
-              <th scope="col" className="p-3 text-start no-print print:hidden">פעולות</th>
+              <th scope="col" className="p-3 text-start">
+                קוד
+              </th>
+              <th scope="col" className="p-3 text-start">
+                שם הפרויקט
+              </th>
+              <th scope="col" className="p-3 text-start">
+                לקוח
+              </th>
+              <th scope="col" className="p-3 text-start">
+                שכר טרחה
+              </th>
+              <th scope="col" className="p-3 text-start">
+                שולם
+              </th>
+              <th scope="col" className="p-3 text-start">
+                יתרה לגבייה
+              </th>
+              <th scope="col" className="p-3 text-start">
+                שלב נוכחי
+              </th>
+              <th scope="col" className="p-3 text-start">
+                סטטוס
+              </th>
+              <th scope="col" className="p-3 text-start no-print print:hidden">
+                פעולות
+              </th>
             </tr>
           </thead>
           <tbody>
             {projects.map((p) => {
               const ms = milestones.filter((m) => m.project_id === p.id);
               const paid = ms.reduce((s, m) => {
-                const full = milestoneAmount(m.amount_type, Number(m.amount_value), Number(p.fee_total));
-                return s + (m.status === "paid" ? full : Math.min(Number(m.paid_amount) || 0, full));
+                const full = milestoneAmount(
+                  m.amount_type,
+                  Number(m.amount_value),
+                  Number(p.fee_total),
+                );
+                return (
+                  s + (m.status === "paid" ? full : Math.min(Number(m.paid_amount) || 0, full))
+                );
               }, 0);
               const open = ms.find((m) => m.status !== "paid");
               const late =
@@ -288,7 +339,9 @@ function ProjectsPage() {
             {projects.length === 0 && (
               <tr>
                 <td colSpan={10} className="p-6 text-center text-muted-foreground">
-                  {allProjects.length ? "לא נמצאו פרויקטים התואמים לסינון." : "עדיין לא הוגדרו פרויקטים. התחל בהוספת פרויקט חדש."}
+                  {allProjects.length
+                    ? "לא נמצאו פרויקטים התואמים לסינון."
+                    : "עדיין לא הוגדרו פרויקטים. התחל בהוספת פרויקט חדש."}
                 </td>
               </tr>
             )}
@@ -305,16 +358,11 @@ function ProjectsPage() {
         />
       ))}
 
-      <AlertDialog
-        open={pendingDelete !== null}
-        onOpenChange={(o) => !o && setPendingDelete(null)}
-      >
+      <AlertDialog open={pendingDelete !== null} onOpenChange={(o) => !o && setPendingDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>האם אתה בטוח?</AlertDialogTitle>
-            <AlertDialogDescription>
-              לאחר המחיקה, לא ניתן לשחזר את המידע
-            </AlertDialogDescription>
+            <AlertDialogDescription>לאחר המחיקה, לא ניתן לשחזר את המידע</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setPendingDelete(null)}>לא</AlertDialogCancel>
@@ -399,8 +447,7 @@ function ProjectDialog({
     (s, m) => s + milestoneAmount(m.amount_type, Number(m.amount_value) || 0, fee),
     0,
   );
-  const stationsValid =
-    stations.length === 0 || (fee > 0 && Math.abs(stationsTotal - fee) < 1);
+  const stationsValid = stations.length === 0 || (fee > 0 && Math.abs(stationsTotal - fee) < 1);
 
   const save = useMutation({
     mutationFn: async () => {
@@ -421,7 +468,11 @@ function ProjectDialog({
         if (error) throw error;
         await saveStations(project.id);
       } else {
-        const { data, error } = await supabase.from("projects").insert(payload).select("id").single();
+        const { data, error } = await supabase
+          .from("projects")
+          .insert(payload)
+          .select("id")
+          .single();
         if (error) throw error;
         if (data) await saveStations(data.id);
       }
@@ -442,9 +493,7 @@ function ProjectDialog({
   async function saveStations(projectId: string) {
     const valid = stations.filter((s) => s.title.trim());
     const keptIds = valid.map((s) => s.id).filter(Boolean) as string[];
-    const removed = projectMilestones
-      .filter((m) => !keptIds.includes(m.id))
-      .map((m) => m.id);
+    const removed = projectMilestones.filter((m) => !keptIds.includes(m.id)).map((m) => m.id);
 
     if (removed.length > 0) {
       const { error } = await supabase.from("project_milestones").delete().in("id", removed);
@@ -592,75 +641,80 @@ function ProjectDialog({
               const rowAmount = milestoneAmount(s.amount_type, Number(s.amount_value) || 0, fee);
               const rowPercent = fee > 0 ? (rowAmount / fee) * 100 : 0;
               return (
-              <div key={idx} className="grid gap-2 sm:grid-cols-[minmax(0,2fr)_7rem_auto_minmax(0,1.2fr)_auto] sm:items-center">
-                <Input
-                  aria-label="שלב בפרויקט"
-                  placeholder="שלב (למשל: חתימת חוזה)"
-                  value={s.title}
-                  onChange={(e) => {
-                    const n = [...stations];
-                    n[idx] = { ...s, title: e.target.value };
-                    setStations(n);
-                  }}
-                />
-                <Select
-                  value={s.amount_type}
-                  onValueChange={(v) => {
-                    const n = [...stations];
-                    n[idx] = { ...s, amount_type: v };
-                    setStations(n);
-                  }}
+                <div
+                  key={idx}
+                  className="grid gap-2 sm:grid-cols-[minmax(0,2fr)_7rem_auto_minmax(0,1.2fr)_auto] sm:items-center"
                 >
-                  <SelectTrigger aria-label="סוג חישוב">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="percent">אחוז</SelectItem>
-                    <SelectItem value="fixed">סכום</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Input
-                  type="text"
-                  inputMode="decimal"
-                  className="text-start font-mono tabular-nums"
-                  style={{ width: `${Math.max(7, s.amount_value.length + 5)}ch` }}
-                  aria-label="ערך התחנה"
-                  placeholder={s.amount_type === "percent" ? "30" : "100000"}
-                  value={s.amount_value}
-                  onChange={(e) => {
-                    const v = e.target.value.replace(/[^\d.]/g, "").slice(0, 9);
-                    const n = [...stations];
-                    n[idx] = { ...s, amount_value: v };
-                    setStations(n);
-                  }}
-                />
-                <Input
-                  type="date"
-                  aria-label="תאריך צפי לתשלום"
-                  value={s.due_date}
-                  onChange={(e) => {
-                    const n = [...stations];
-                    n[idx] = { ...s, due_date: e.target.value };
-                    setStations(n);
-                  }}
-                />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="מחיקת תחנה"
-                  onClick={() => setStations(stations.filter((_, i) => i !== idx))}
-                >
-                  <Trash2 className="size-4" />
-                </Button>
-                <p className="text-xs text-muted-foreground sm:col-span-5">
-                  שווה ערך: {fmtMoney(rowAmount)} · {rowPercent.toFixed(1)}% משכר הטרחה
-                  {s.status === "paid" && " · שולם"}
-                </p>
-              </div>
+                  <Input
+                    aria-label="שלב בפרויקט"
+                    placeholder="שלב (למשל: חתימת חוזה)"
+                    value={s.title}
+                    onChange={(e) => {
+                      const n = [...stations];
+                      n[idx] = { ...s, title: e.target.value };
+                      setStations(n);
+                    }}
+                  />
+                  <Select
+                    value={s.amount_type}
+                    onValueChange={(v) => {
+                      const n = [...stations];
+                      n[idx] = { ...s, amount_type: v };
+                      setStations(n);
+                    }}
+                  >
+                    <SelectTrigger aria-label="סוג חישוב">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="percent">אחוז</SelectItem>
+                      <SelectItem value="fixed">סכום</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    className="text-start font-mono tabular-nums"
+                    style={{ width: `${Math.max(7, s.amount_value.length + 5)}ch` }}
+                    aria-label="ערך התחנה"
+                    placeholder={s.amount_type === "percent" ? "30" : "100000"}
+                    value={s.amount_value}
+                    onChange={(e) => {
+                      const v = e.target.value.replace(/[^\d.]/g, "").slice(0, 9);
+                      const n = [...stations];
+                      n[idx] = { ...s, amount_value: v };
+                      setStations(n);
+                    }}
+                  />
+                  <Input
+                    type="date"
+                    aria-label="תאריך צפי לתשלום"
+                    value={s.due_date}
+                    onChange={(e) => {
+                      const n = [...stations];
+                      n[idx] = { ...s, due_date: e.target.value };
+                      setStations(n);
+                    }}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="מחיקת תחנה"
+                    onClick={() => setStations(stations.filter((_, i) => i !== idx))}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                  <p className="text-xs text-muted-foreground sm:col-span-5">
+                    שווה ערך: {fmtMoney(rowAmount)} · {rowPercent.toFixed(1)}% משכר הטרחה
+                    {s.status === "paid" && " · שולם"}
+                  </p>
+                </div>
               );
             })}
             {stations.length > 0 && (
-              <p className={`text-sm ${stationsValid ? "text-muted-foreground" : "text-destructive font-medium"}`}>
+              <p
+                className={`text-sm ${stationsValid ? "text-muted-foreground" : "text-destructive font-medium"}`}
+              >
                 סך כל התחנות יחד: {fmtMoney(stationsTotal)} מתוך שכר טרחה {fmtMoney(fee)}
                 {fee > 0 && ` · ${((stationsTotal / fee) * 100).toFixed(1)}%`}
                 {!stationsValid &&
@@ -796,39 +850,67 @@ function MilestonesPanel({
         תנאי תשלום – {project.code} · {project.name}
       </h2>
       <p className="mb-3 text-sm text-muted-foreground">
-        ניתן לעדכן סטטוס גבייה לכל תחנה, ולרשום גבייה חלקית בשדה "נגבה בפועל". תחנה שנגבתה במלואה
-        לא תיספר עוד כחריגה או כיתרה לגבייה.
+        ניתן לעדכן סטטוס גבייה לכל תחנה, ולרשום גבייה חלקית בשדה "נגבה בפועל". תחנה שנגבתה במלואה לא
+        תיספר עוד כחריגה או כיתרה לגבייה.
       </p>
 
       <table className="w-full text-sm">
         <thead className="bg-muted/60">
           <tr>
-            <th scope="col" className="p-2 text-start">שלב</th>
-            <th scope="col" className="p-2 text-start">סוג</th>
-            <th scope="col" className="p-2 text-start">ערך</th>
-            <th scope="col" className="p-2 text-start">סכום</th>
-            <th scope="col" className="p-2 text-start">נגבה בפועל</th>
-            <th scope="col" className="p-2 text-start">יתרה</th>
-            <th scope="col" className="p-2 text-start">לו״ז לביצוע</th>
-            <th scope="col" className="p-2 text-start">סטטוס</th>
-            <th scope="col" className="p-2 text-start">פעולות</th>
+            <th scope="col" className="p-2 text-start">
+              שלב
+            </th>
+            <th scope="col" className="p-2 text-start">
+              סוג
+            </th>
+            <th scope="col" className="p-2 text-start">
+              ערך
+            </th>
+            <th scope="col" className="p-2 text-start">
+              סכום
+            </th>
+            <th scope="col" className="p-2 text-start">
+              נגבה בפועל
+            </th>
+            <th scope="col" className="p-2 text-start">
+              יתרה
+            </th>
+            <th scope="col" className="p-2 text-start">
+              לו״ז לביצוע
+            </th>
+            <th scope="col" className="p-2 text-start">
+              סטטוס
+            </th>
+            <th scope="col" className="p-2 text-start">
+              פעולות
+            </th>
           </tr>
         </thead>
         <tbody>
           {milestones.map((m) => {
-            const full = milestoneAmount(m.amount_type, Number(m.amount_value), Number(project.fee_total));
-            const collected = m.status === "paid" ? full : Math.min(Number(m.paid_amount) || 0, full);
+            const full = milestoneAmount(
+              m.amount_type,
+              Number(m.amount_value),
+              Number(project.fee_total),
+            );
+            const collected =
+              m.status === "paid" ? full : Math.min(Number(m.paid_amount) || 0, full);
             const remaining = Math.max(0, full - collected);
             const late =
               remaining > 0 && m.due_date && daysBetween(m.due_date, todayIso()) > 0
                 ? daysBetween(m.due_date, todayIso())
                 : 0;
             return (
-              <tr key={m.id} className={`border-t border-border ${late ? "bg-destructive/10" : ""}`}>
+              <tr
+                key={m.id}
+                className={`border-t border-border ${late ? "bg-destructive/10" : ""}`}
+              >
                 <td className="p-2">{m.title}</td>
                 <td className="p-2">{m.amount_type === "percent" ? "אחוז" : "סכום"}</td>
                 <td className="p-2">
-                  {m.amount_type === "percent" ? `${m.amount_value}%` : fmtMoney(Number(m.amount_value))}
+                  {m.amount_type === "percent"
+                    ? `${m.amount_value}%`
+                    : fmtMoney(Number(m.amount_value))}
                 </td>
                 <td className="p-2">{fmtMoney(full)}</td>
                 <td className="p-2">
@@ -840,7 +922,14 @@ function MilestonesPanel({
                         id: m.id,
                         patch: {
                           paid_amount: v,
-                          status: v >= full - 0.5 ? "paid" : v > 0 ? "invoiced" : m.status === "paid" ? "pending" : m.status,
+                          status:
+                            v >= full - 0.5
+                              ? "paid"
+                              : v > 0
+                                ? "invoiced"
+                                : m.status === "paid"
+                                  ? "pending"
+                                  : m.status,
                           paid_date: v >= full - 0.5 ? todayIso() : null,
                         },
                       })
@@ -901,7 +990,10 @@ function MilestonesPanel({
           value={draft.title}
           onChange={(e) => setDraft({ ...draft, title: e.target.value })}
         />
-        <Select value={draft.amount_type} onValueChange={(v) => setDraft({ ...draft, amount_type: v })}>
+        <Select
+          value={draft.amount_type}
+          onValueChange={(v) => setDraft({ ...draft, amount_type: v })}
+        >
           <SelectTrigger aria-label="סוג חישוב">
             <SelectValue />
           </SelectTrigger>
@@ -934,5 +1026,224 @@ function MilestonesPanel({
         </Button>
       </div>
     </section>
+  );
+}
+
+/**
+ * Bulk import projects from a CSV file.
+ * Expected columns (header row, order-insensitive by name):
+ * code,name,client,fee,hours_budget,start_date,notes  — Hebrew headers also accepted.
+ */
+function ImportCsvDialog({
+  existingCodes,
+  onDone,
+}: {
+  existingCodes: string[];
+  onDone: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [preview, setPreview] = useState<
+    Array<{
+      code: string;
+      name: string;
+      client_name: string;
+      fee_total: number;
+      hours_budget: number | null;
+      start_date: string | null;
+      notes: string | null;
+      exists: boolean;
+    }>
+  >([]);
+  const [errors, setErrors] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  const HEADER_MAP: Record<string, string> = {
+    code: "code",
+    קוד: "code",
+    name: "name",
+    שם: "name",
+    "שם הפרויקט": "name",
+    פרויקט: "name",
+    client: "client",
+    לקוח: "client",
+    client_name: "client",
+    fee: "fee",
+    "שכר טרחה": "fee",
+    fee_total: "fee",
+    hours_budget: "budget",
+    budget: "budget",
+    "תקציב שעות": "budget",
+    start_date: "start",
+    "תאריך התחלה": "start",
+    notes: "notes",
+    הערות: "notes",
+  };
+
+  function onFile(file: File) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const rows = parseCsv(String(reader.result ?? ""));
+      if (rows.length < 2) {
+        setErrors(["הקובץ ריק או שאין בו שורת כותרות + נתונים."]);
+        setPreview([]);
+        return;
+      }
+      const header = rows[0].map(
+        (h) => HEADER_MAP[h.trim().toLowerCase()] ?? HEADER_MAP[h.trim()] ?? "",
+      );
+      const idx = (k: string) => header.indexOf(k);
+      if (idx("code") === -1 || idx("name") === -1) {
+        setErrors(['חובה עמודות "קוד" ו"שם" (או code / name) בשורת הכותרות.']);
+        setPreview([]);
+        return;
+      }
+      const errs: string[] = [];
+      const seen = new Set<string>();
+      const parsed = rows.slice(1).flatMap((r, i) => {
+        const code = (r[idx("code")] ?? "").trim();
+        const name = (r[idx("name")] ?? "").trim();
+        if (!code || !name) {
+          errs.push(`שורה ${i + 2}: חסר קוד או שם – דולגה.`);
+          return [];
+        }
+        if (seen.has(code)) {
+          errs.push(`שורה ${i + 2}: קוד ${code} מופיע פעמיים בקובץ – דולגה.`);
+          return [];
+        }
+        seen.add(code);
+        const feeRaw = idx("fee") >= 0 ? (r[idx("fee")] ?? "").replace(/[^\d.-]/g, "") : "";
+        const budgetRaw = idx("budget") >= 0 ? (r[idx("budget")] ?? "").replace(/[^\d.]/g, "") : "";
+        const start = idx("start") >= 0 ? (r[idx("start")] ?? "").trim() : "";
+        return [
+          {
+            code,
+            name,
+            client_name: idx("client") >= 0 ? (r[idx("client")] ?? "").trim() : "",
+            fee_total: Number(feeRaw) || 0,
+            hours_budget: budgetRaw ? Number(budgetRaw) : null,
+            start_date: /^\d{4}-\d{2}-\d{2}$/.test(start) ? start : null,
+            notes: idx("notes") >= 0 ? (r[idx("notes")] ?? "").trim() || null : null,
+            exists: existingCodes.includes(code),
+          },
+        ];
+      });
+      setErrors(errs);
+      setPreview(parsed);
+    };
+    reader.readAsText(file, "utf-8");
+  }
+
+  async function doImport() {
+    setBusy(true);
+    try {
+      const rows = preview.map(({ exists: _e, ...rest }) => ({
+        ...rest,
+        client_name: rest.client_name || null,
+        status: "active",
+      }));
+      const { error } = await supabase.from("projects").upsert(rows, { onConflict: "code" });
+      if (error) throw error;
+      toast.success(`${rows.length} פרויקטים יובאו בהצלחה`);
+      setOpen(false);
+      setPreview([]);
+      setErrors([]);
+      onDone();
+    } catch {
+      toast.error("הייבוא נכשל – יש לבדוק את מבנה הקובץ");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const updating = preview.filter((p) => p.exists).length;
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (!o) {
+          setPreview([]);
+          setErrors([]);
+        }
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button variant="outline">
+          <Upload className="size-4" />
+          ייבוא מ‑CSV
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>ייבוא פרויקטים מקובץ CSV</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <p className="rounded-lg bg-muted p-3 text-sm text-muted-foreground">
+            הקובץ צריך שורת כותרות עם העמודות: קוד, שם, לקוח, שכר טרחה, תקציב שעות, תאריך התחלה
+            (YYYY-MM-DD), הערות. קוד ושם הן חובה; השאר רשות. שמירה מאקסל: קובץ ← שמירה בשם ← CSV
+            UTF-8. פרויקט עם קוד קיים יעודכן במקום להיווצר כפול.
+          </p>
+          <Input
+            type="file"
+            accept=".csv,text/csv"
+            aria-label="בחירת קובץ CSV"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) onFile(f);
+            }}
+          />
+          {errors.length > 0 && (
+            <ul className="list-inside list-disc rounded-lg border border-warning/50 bg-warning/10 p-3 text-sm">
+              {errors.map((e, i) => (
+                <li key={i}>{e}</li>
+              ))}
+            </ul>
+          )}
+          {preview.length > 0 && (
+            <>
+              <p className="text-sm font-medium">
+                {preview.length} פרויקטים לייבוא
+                {updating > 0 && ` (מתוכם ${updating} עדכון לקוד קיים)`}
+              </p>
+              <div className="max-h-64 overflow-auto rounded-lg border border-border">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-muted">
+                    <tr>
+                      <th className="p-2 text-start">קוד</th>
+                      <th className="p-2 text-start">שם</th>
+                      <th className="p-2 text-start">לקוח</th>
+                      <th className="p-2 text-start">שכר טרחה</th>
+                      <th className="p-2 text-start">תקציב שעות</th>
+                      <th className="p-2 text-start">סטטוס</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.map((r) => (
+                      <tr key={r.code} className="border-t border-border">
+                        <td className="p-2 font-mono">{r.code}</td>
+                        <td className="p-2">{r.name}</td>
+                        <td className="p-2">{r.client_name || "—"}</td>
+                        <td className="p-2 tabular-nums">{fmtMoney(r.fee_total)}</td>
+                        <td className="p-2 tabular-nums">{r.hours_budget ?? "—"}</td>
+                        <td className="p-2">{r.exists ? "עדכון" : "חדש"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>
+            ביטול
+          </Button>
+          <Button disabled={busy || preview.length === 0} onClick={doImport}>
+            {busy ? "מייבא…" : `ייבוא ${preview.length} פרויקטים`}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -60,7 +60,7 @@ function AuthPage() {
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     setBusy(false);
     if (error) {
-      toast.error("כניסה נכשלה", { description: "בדוק את שם המשתמש והסיסמה ונסה שוב." });
+      toast.error("כניסה נכשלה", { description: "יש לבדוק את כתובת המייל והסיסמה ולנסות שוב." });
       return;
     }
     if (next) window.location.replace(next);
@@ -313,9 +313,12 @@ function AuthPage() {
           </div>
         </div>
 
-        <p className="mt-6 text-center text-sm text-muted-foreground">
+        <p className="mt-6 flex justify-center gap-4 text-center text-sm text-muted-foreground">
           <Link to="/" className="underline">
             על המערכת והוראות הפעלה
+          </Link>
+          <Link to="/accessibility" className="underline">
+            הצהרת נגישות
           </Link>
         </p>
       </div>
