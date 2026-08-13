@@ -511,7 +511,16 @@ function EmployeesPage() {
                   <Switch
                     checked={isAdminUser(p.id)}
                     aria-label={`הרשאת מנהל עבור ${p.full_name || p.email}`}
-                    onCheckedChange={(v) => setRole.mutate({ userId: p.id, admin: v })}
+                    onCheckedChange={(v) => {
+                      setAdminPassword("");
+                      setRoleConfirm({
+                        title: v ? "מתן הרשאת מנהל" : "ביטול הרשאת מנהל",
+                        description: `${v ? "הענקת" : "הסרת"} הרשאת מנהל עבור ${
+                          p.full_name || p.email
+                        }. לאישור הפעולה יש להזין את הסיסמה שלך.`,
+                        run: () => setRole.mutate({ userId: p.id, admin: v }),
+                      });
+                    }}
                   />
                 </td>
                 <td className="p-3">
