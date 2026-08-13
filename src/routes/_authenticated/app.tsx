@@ -19,7 +19,16 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { holidayFor } from "@/lib/holidays";
-import { fetchMonthEntries, fetchProjectDirectory, trimTime, type TimeEntry } from "@/lib/queries";
+import {
+  dayHours,
+  fetchMonthEntries,
+  fetchProjectDirectory,
+  groupByDate,
+  isOpenSegment,
+  segmentHours,
+  trimTime,
+  type TimeEntry,
+} from "@/lib/queries";
 import {
   ABSENCE_TYPES,
   absenceLabel,
@@ -223,11 +232,7 @@ function TimesheetPage() {
     return list;
   }, [range.days, year, month]);
 
-  const entryByDate = useMemo(() => {
-    const map = new Map<string, TimeEntry>();
-    monthQ.data?.entries.forEach((e) => map.set(e.work_date, e));
-    return map;
-  }, [monthQ.data]);
+  const segsByDate = useMemo(() => groupByDate(monthQ.data?.entries), [monthQ.data]);
 
   const hoursByDate = useMemo(() => {
     const map = new Map<string, number>();
@@ -242,46 +247,53 @@ function TimesheetPage() {
     let projects = 0;
     let absences = 0;
     days.forEach((d) => {
-      const e = entryByDate.get(d);
-      if (e?.absence_type) absences += 1;
-      attendance += computeHours(
-        trimTime(e?.clock_in ?? null),
-        trimTime(e?.clock_out ?? null),
-        e?.break_minutes ?? 0,
-      );
+      const segs = segsByDate.get(d) ?? [];
+      if (segs.some((e) => e.absence_type)) absences += 1;
+      attendance += dayHours(segs);
       projects += hoursByDate.get(d) ?? 0;
     });
     return { attendance, projects, absences };
-  }, [days, entryByDate, hoursByDate]);
+  }, [days, segsByDate, hoursByDate]);
 
-  /** Past working days with a clock-in but no clock-out and no absence. */
+  /** ימים עם מקטע פתוח (כניסה בלי יציאה) שדורש השלמה. מקטע פעיל של עכשיו אינו נחשב. */
   const missingOut = useMemo(() => {
     const today = todayIso();
     return days.filter((d) => {
-      if (d >= today) return false;
-      const e = entryByDate.get(d);
-      return Boolean(e?.clock_in) && !e?.clock_out && !e?.absence_type;
+      if (d > today) return false;
+      const open = (segsByDate.get(d) ?? []).filter(isOpenSegment);
+      // ביום שעבר – כל מקטע פתוח חסר יציאה. היום – מקטע אחד פתוח הוא המשמרת הנוכחית.
+      return d < today ? open.length > 0 : open.length > 1;
     });
-  }, [days, entryByDate]);
+  }, [days, segsByDate]);
 
-  const todayEntry = entryByDate.get(todayIso());
-  const onBreak = Boolean(todayEntry?.break_start);
+  const todaySegs = useMemo(() => segsByDate.get(todayIso()) ?? [], [segsByDate]);
+  const openSeg = useMemo(() => [...todaySegs].reverse().find(isOpenSegment) ?? null, [todaySegs]);
+  const onBreak = Boolean(openSeg?.break_start);
+  const todayBreakMinutes = todaySegs.reduce((s, e) => s + (e.break_minutes ?? 0), 0);
 
   const clockMutation = useMutation({
     mutationFn: async (kind: "in" | "out" | "break-start" | "break-end") => {
       const date = todayIso();
-      const existing = entryByDate.get(date);
+      const existing = openSeg;
       let payload: {
         clock_in?: string;
         clock_out?: string;
         break_minutes?: number;
         break_start?: string | null;
       } = {};
-      if (kind === "in") payload = { clock_in: nowTime() };
-      else if (kind === "out") {
+      if (kind === "in") {
+        if (existing) throw new Error("open-segment");
+        const { error } = await supabase
+          .from("time_entries")
+          .insert({ user_id: userId, work_date: date, clock_in: nowTime() });
+        if (error) throw error;
+        return;
+      }
+      if (!existing) throw new Error("no-open-segment");
+      if (kind === "out") {
         payload = { clock_out: nowTime() };
         // Close a forgotten open break on clock-out
-        if (existing?.break_start) {
+        if (existing.break_start) {
           payload.break_minutes =
             (existing.break_minutes ?? 0) +
             minutesBetween(trimTime(existing.break_start), nowTime());
@@ -290,37 +302,37 @@ function TimesheetPage() {
       } else if (kind === "break-start") {
         payload = { break_start: nowTime() };
       } else {
-        const start = existing?.break_start;
+        const start = existing.break_start;
         if (!start) throw new Error("no-break");
         payload = {
-          break_minutes:
-            (existing?.break_minutes ?? 0) + minutesBetween(trimTime(start), nowTime()),
+          break_minutes: (existing.break_minutes ?? 0) + minutesBetween(trimTime(start), nowTime()),
           break_start: null,
         };
       }
-      if (existing) {
-        const { error } = await supabase.from("time_entries").update(payload).eq("id", existing.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from("time_entries")
-          .insert({ user_id: userId, work_date: date, ...payload });
-        if (error) throw error;
-      }
+      const { error } = await supabase.from("time_entries").update(payload).eq("id", existing.id);
+      if (error) throw error;
     },
     onSuccess: (_d, kind) => {
       toast.success(
         kind === "in"
-          ? "נרשמה כניסה"
+          ? "נרשמה כניסה – נפתח מקטע חדש"
           : kind === "out"
-            ? "נרשמה יציאה"
+            ? "נרשמה יציאה – המקטע נסגר"
             : kind === "break-start"
               ? "יצאת להפסקה"
               : "חזרת מהפסקה – ההפסקה נרשמה",
       );
       qc.invalidateQueries({ queryKey: ["month"] });
+      qc.invalidateQueries({ queryKey: ["day"] });
     },
-    onError: () => toast.error("שמירת הדיווח נכשלה"),
+    onError: (e: Error) =>
+      toast.error(
+        e.message === "open-segment"
+          ? "יש מקטע פתוח – יש לרשום יציאה לפני כניסה חדשה"
+          : e.message === "no-open-segment"
+            ? "אין מקטע פתוח – יש לרשום כניסה תחילה"
+            : "שמירת הדיווח נכשלה",
+      ),
   });
 
   const timerMutation = useMutation({
