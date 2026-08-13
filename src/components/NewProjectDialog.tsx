@@ -39,7 +39,7 @@ export function NewProjectDialog({ triggerLabel = "פרויקט חדש" }: { tri
       setForm({ code: "", name: "", client_name: "", start_date: "" });
       setOpen(false);
       qc.invalidateQueries({ queryKey: ["projects-dir"] });
-      qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["projects-full"] });
       qc.invalidateQueries({ queryKey: ["projects-review"] });
     },
     onError: (e: unknown) => {
