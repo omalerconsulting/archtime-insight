@@ -58,7 +58,43 @@ function EmployeesPage() {
   const [hr, setHr] = useState<Record<string, { hire: string; quota: string }>>({});
   const [checked, setChecked] = useState<string[]>([]);
   const [bulkDelete, setBulkDelete] = useState(false);
+  const [roleConfirm, setRoleConfirm] = useState<{
+    title: string;
+    description: string;
+    run: () => void;
+  } | null>(null);
+  const [adminPassword, setAdminPassword] = useState("");
+  const [verifying, setVerifying] = useState(false);
   const bulkDel = useServerFn(deleteEmployee);
+
+  const verifyAndRun = async () => {
+    if (!roleConfirm) return;
+    if (!adminPassword) {
+      toast.error("יש להזין סיסמה");
+      return;
+    }
+    setVerifying(true);
+    try {
+      const { data: userRes } = await supabase.auth.getUser();
+      const email = userRes.user?.email;
+      if (!email) throw new Error("no-email");
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password: adminPassword,
+      });
+      if (error) {
+        toast.error("הסיסמה שהוזנה שגויה");
+        return;
+      }
+      roleConfirm.run();
+      setRoleConfirm(null);
+      setAdminPassword("");
+    } catch {
+      toast.error("האימות נכשל");
+    } finally {
+      setVerifying(false);
+    }
+  };
 
   const q = useQuery({
     queryKey: ["employees"],
