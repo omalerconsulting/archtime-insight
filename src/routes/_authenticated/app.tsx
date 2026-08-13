@@ -750,8 +750,13 @@ function TimesheetPage() {
                 </span>
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                {e?.clock_in && <span>כניסה {trimTime(e.clock_in).slice(0, 5)}</span>}
-                {e?.clock_out && <span>יציאה {trimTime(e.clock_out).slice(0, 5)}</span>}
+                {segs.map((s) => (
+                  <span key={s.id} className="tabular-nums">
+                    {trimTime(s.clock_in).slice(0, 5) || "—"}–
+                    {trimTime(s.clock_out).slice(0, 5) || "פתוח"}
+                  </span>
+                ))}
+                {segs.length > 1 && <span>{segs.length} מקטעים</span>}
                 {missing && <span className="font-semibold text-destructive">חסרה יציאה</span>}
                 {proj > 0 && <span>פרויקטים {hoursToDuration(proj)}</span>}
                 {holiday && <span>{holiday.name}</span>}
