@@ -331,6 +331,11 @@ function ProjectsPage() {
                     >
                       {p.name}
                     </button>
+                    {p.needs_admin_review && (
+                      <span className="ms-2 rounded-md bg-amber-500/20 px-1.5 py-0.5 text-xs font-medium text-amber-700">
+                        ממתין להשלמת פרטים
+                      </span>
+                    )}
                   </td>
                   <td className="p-3">{p.client_name || "—"}</td>
                   <td className="p-3">{fmtMoney(Number(p.fee_total))}</td>
@@ -498,6 +503,7 @@ function ProjectDialog({
         start_date: form.start_date || null,
         status: form.status,
         notes: form.notes || null,
+        needs_admin_review: false,
       };
       if (!payload.code || !payload.name) throw new Error("missing");
       if (!stationsValid) throw new Error("stations");

@@ -59,6 +59,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ProjectPicker } from "@/components/ProjectPicker";
+import { NewProjectDialog } from "@/components/NewProjectDialog";
+import { PendingProjectsNotice } from "@/components/PendingProjectsNotice";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -431,6 +433,7 @@ function TimesheetPage() {
 
   return (
     <div className="space-y-6">
+      <PendingProjectsNotice />
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
@@ -647,6 +650,7 @@ function TimesheetPage() {
                   <Play className="size-4" />
                   התחלה
                 </Button>
+                <NewProjectDialog />
               </div>
             )}
             <p className="mt-1 text-xs text-muted-foreground">
