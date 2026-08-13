@@ -19,6 +19,7 @@ import {
 } from "@/lib/time";
 import { trimTime } from "@/lib/queries";
 import { Button } from "@/components/ui/button";
+import { SortControls, sortRows, type SortDir } from "@/components/SortControls";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -66,6 +67,10 @@ function DashboardPage() {
   const [scope, setScope] = useState("all");
   const [month, setMonth] = useState(now.getMonth());
   const [year, setYear] = useState(now.getFullYear());
+  const [projSort, setProjSort] = useState("code");
+  const [projDir, setProjDir] = useState<SortDir>("asc");
+  const [empSort, setEmpSort] = useState("name");
+  const [empDir, setEmpDir] = useState<SortDir>("asc");
 
   const range = monthRange(year, month);
   const scoped = scope === "month";
@@ -229,6 +234,26 @@ function DashboardPage() {
     );
 
   const { rows, employees, totals, missingRates, overBudget, pending } = analysis;
+  const sortedRows = sortRows(rows, projSort, projDir, {
+    code: (r) => r.project.code,
+    name: (r) => r.project.name,
+    client: (r) => r.project.client_name ?? "",
+    hours: (r) => r.totalHours,
+    cost: (r) => r.cost,
+    fee: (r) => Number(r.project.fee_total),
+    profit: (r) => r.profit,
+    margin: (r) => r.margin,
+    budgetPct: (r) => r.budgetPct ?? -1,
+    lateDays: (r) => r.lateDays,
+  });
+  const sortedEmployees = sortRows(employees, empSort, empDir, {
+    name: (e) => e.emp.full_name || e.emp.email,
+    attendance: (e) => e.attendance,
+    projectHours: (e) => e.projectHours,
+    coverage: (e) => e.coverage,
+    overtime: (e) => e.overtime,
+    absences: (e) => e.absences,
+  });
   const profit = totals.fee - totals.cost;
   const topHours = rows.slice(0, 8).map((r) => ({
     name: `${r.project.code}`,
@@ -491,8 +516,31 @@ function DashboardPage() {
         </section>
 
         <section className="overflow-x-auto rounded-xl border border-border bg-card">
+          <div className="flex flex-wrap items-end justify-between gap-3 p-3">
+            <p className="font-semibold">ניתוח פרויקטים</p>
+            <SortControls
+              id="dash-proj-sort"
+              className="no-print print:hidden"
+              value={projSort}
+              onValueChange={setProjSort}
+              dir={projDir}
+              onDirChange={setProjDir}
+              options={[
+                { value: "code", label: "מספר פרויקט" },
+                { value: "name", label: "שם הפרויקט (א״ב)" },
+                { value: "client", label: "לקוח (א״ב)" },
+                { value: "hours", label: "שעות מושקעות" },
+                { value: "budgetPct", label: "ניצול תקציב" },
+                { value: "cost", label: "עלות שעות" },
+                { value: "fee", label: "שכר טרחה" },
+                { value: "profit", label: "רווח" },
+                { value: "margin", label: "שיעור רווח" },
+                { value: "lateDays", label: "ימי חריגה" },
+              ]}
+            />
+          </div>
           <table className="w-full text-sm">
-            <caption className="p-3 text-start font-semibold">ניתוח פרויקטים</caption>
+            <caption className="sr-only">ניתוח פרויקטים</caption>
             <thead className="bg-muted/60">
               <tr>
                 <th scope="col" className="p-3 text-start">
@@ -528,7 +576,7 @@ function DashboardPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
+              {sortedRows.map((r) => (
                 <tr
                   key={r.project.id}
                   className={`border-t border-border ${r.lateDays ? "bg-destructive/10" : ""}`}
@@ -599,8 +647,25 @@ function DashboardPage() {
         </section>
 
         <section className="overflow-x-auto rounded-xl border border-border bg-card">
-          <div className="flex items-center justify-between p-3">
+          <div className="flex flex-wrap items-end justify-between gap-3 p-3">
             <p className="font-semibold">יעילות וחריגות עובדים</p>
+            <div className="flex flex-wrap items-end gap-2">
+            <SortControls
+              id="dash-emp-sort"
+              className="no-print print:hidden"
+              value={empSort}
+              onValueChange={setEmpSort}
+              dir={empDir}
+              onDirChange={setEmpDir}
+              options={[
+                { value: "name", label: "שם העובד (א״ב)" },
+                { value: "attendance", label: "שעות נוכחות" },
+                { value: "projectHours", label: "שעות פרויקטים" },
+                { value: "coverage", label: "אחוז שיוך" },
+                { value: "overtime", label: "שעות נוספות" },
+                { value: "absences", label: "ימי היעדרות" },
+              ]}
+            />
             <Button
               size="sm"
               variant="ghost"
@@ -610,6 +675,7 @@ function DashboardPage() {
               <Download className="size-4" />
               ייצוא
             </Button>
+            </div>
           </div>
           <table className="w-full text-sm">
             <thead className="bg-muted/60">
@@ -635,7 +701,7 @@ function DashboardPage() {
               </tr>
             </thead>
             <tbody>
-              {employees.map((e) => (
+              {sortedEmployees.map((e) => (
                 <tr key={e.emp.id} className="border-t border-border">
                   <td className="p-3 font-medium">{e.emp.full_name || e.emp.email}</td>
                   <td className="p-3 tabular-nums">{fmtHours(e.attendance)}</td>
