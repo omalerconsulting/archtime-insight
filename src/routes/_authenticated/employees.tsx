@@ -58,7 +58,43 @@ function EmployeesPage() {
   const [hr, setHr] = useState<Record<string, { hire: string; quota: string }>>({});
   const [checked, setChecked] = useState<string[]>([]);
   const [bulkDelete, setBulkDelete] = useState(false);
+  const [roleConfirm, setRoleConfirm] = useState<{
+    title: string;
+    description: string;
+    run: () => void;
+  } | null>(null);
+  const [adminPassword, setAdminPassword] = useState("");
+  const [verifying, setVerifying] = useState(false);
   const bulkDel = useServerFn(deleteEmployee);
+
+  const verifyAndRun = async () => {
+    if (!roleConfirm) return;
+    if (!adminPassword) {
+      toast.error("יש להזין סיסמה");
+      return;
+    }
+    setVerifying(true);
+    try {
+      const { data: userRes } = await supabase.auth.getUser();
+      const email = userRes.user?.email;
+      if (!email) throw new Error("no-email");
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password: adminPassword,
+      });
+      if (error) {
+        toast.error("הסיסמה שהוזנה שגויה");
+        return;
+      }
+      roleConfirm.run();
+      setRoleConfirm(null);
+      setAdminPassword("");
+    } catch {
+      toast.error("האימות נכשל");
+    } finally {
+      setVerifying(false);
+    }
+  };
 
   const q = useQuery({
     queryKey: ["employees"],
@@ -248,7 +284,14 @@ function EmployeesPage() {
           size="sm"
           variant="outline"
           disabled={!checked.length || bulk.isPending}
-          onClick={() => bulk.mutate("admin")}
+          onClick={() => {
+            setAdminPassword("");
+            setRoleConfirm({
+              title: "מתן הרשאת מנהל",
+              description: `הענקת הרשאת מנהל ל-${checked.length} משתמשים מסומנים. לאישור הפעולה יש להזין את הסיסמה שלך.`,
+              run: () => bulk.mutate("admin"),
+            });
+          }}
         >
           מתן הרשאת מנהל
         </Button>
@@ -256,7 +299,14 @@ function EmployeesPage() {
           size="sm"
           variant="outline"
           disabled={!checked.length || bulk.isPending}
-          onClick={() => bulk.mutate("unadmin")}
+          onClick={() => {
+            setAdminPassword("");
+            setRoleConfirm({
+              title: "הסרת הרשאת מנהל",
+              description: `הסרת הרשאת מנהל מ-${checked.length} משתמשים מסומנים. לאישור הפעולה יש להזין את הסיסמה שלך.`,
+              run: () => bulk.mutate("unadmin"),
+            });
+          }}
         >
           הסרת הרשאת מנהל
         </Button>
@@ -475,7 +525,16 @@ function EmployeesPage() {
                   <Switch
                     checked={isAdminUser(p.id)}
                     aria-label={`הרשאת מנהל עבור ${p.full_name || p.email}`}
-                    onCheckedChange={(v) => setRole.mutate({ userId: p.id, admin: v })}
+                    onCheckedChange={(v) => {
+                      setAdminPassword("");
+                      setRoleConfirm({
+                        title: v ? "מתן הרשאת מנהל" : "ביטול הרשאת מנהל",
+                        description: `${v ? "הענקת" : "הסרת"} הרשאת מנהל עבור ${
+                          p.full_name || p.email
+                        }. לאישור הפעולה יש להזין את הסיסמה שלך.`,
+                        run: () => setRole.mutate({ userId: p.id, admin: v }),
+                      });
+                    }}
                   />
                 </td>
                 <td className="p-3">
@@ -500,6 +559,50 @@ function EmployeesPage() {
           </tbody>
         </table>
       </div>
+
+      <Dialog
+        open={Boolean(roleConfirm)}
+        onOpenChange={(o) => {
+          if (!o) {
+            setRoleConfirm(null);
+            setAdminPassword("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{roleConfirm?.title}</DialogTitle>
+            <DialogDescription>{roleConfirm?.description}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="role-confirm-password">הסיסמה שלך</Label>
+            <Input
+              id="role-confirm-password"
+              type="password"
+              autoComplete="current-password"
+              value={adminPassword}
+              onChange={(e) => setAdminPassword(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void verifyAndRun();
+              }}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setRoleConfirm(null);
+                setAdminPassword("");
+              }}
+            >
+              ביטול
+            </Button>
+            <Button disabled={verifying} onClick={() => void verifyAndRun()}>
+              {verifying ? "מאמת…" : "אישור"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
