@@ -5,6 +5,7 @@ import { AlertTriangle, Download, Plus, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminOnly } from "@/components/AdminOnly";
+import { SortControls, sortRows, type SortDir } from "@/components/SortControls";
 import { exportCsv } from "@/lib/csv";
 import { downloadProjectsTemplate, readSheetRows } from "@/lib/projects-import";
 import {
