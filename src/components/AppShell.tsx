@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { MonthEndNotice } from "@/components/MonthEndNotice";
 import { ForcePasswordChange } from "@/components/ForcePasswordChange";
 import { PendingApproval } from "@/components/PendingApproval";
+import { MyDetailsDialog } from "@/components/MyDetailsDialog";
 import officeLogo from "@/assets/office-logo.png";
 
 type NavItem = { to: string; label: string; icon: typeof Building2; adminOnly?: boolean };
@@ -140,6 +141,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="hidden text-end sm:block">
               <p className="text-sm font-medium">{profile?.full_name || profile?.email}</p>
             </div>
+            <MyDetailsDialog />
             <Button variant="outline" size="sm" onClick={signOut}>
               <LogOut className="size-4" />
               יציאה
