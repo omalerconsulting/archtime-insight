@@ -284,7 +284,14 @@ function EmployeesPage() {
           size="sm"
           variant="outline"
           disabled={!checked.length || bulk.isPending}
-          onClick={() => bulk.mutate("admin")}
+          onClick={() => {
+            setAdminPassword("");
+            setRoleConfirm({
+              title: "מתן הרשאת מנהל",
+              description: `הענקת הרשאת מנהל ל-${checked.length} משתמשים מסומנים. לאישור הפעולה יש להזין את הסיסמה שלך.`,
+              run: () => bulk.mutate("admin"),
+            });
+          }}
         >
           מתן הרשאת מנהל
         </Button>
@@ -292,7 +299,14 @@ function EmployeesPage() {
           size="sm"
           variant="outline"
           disabled={!checked.length || bulk.isPending}
-          onClick={() => bulk.mutate("unadmin")}
+          onClick={() => {
+            setAdminPassword("");
+            setRoleConfirm({
+              title: "הסרת הרשאת מנהל",
+              description: `הסרת הרשאת מנהל מ-${checked.length} משתמשים מסומנים. לאישור הפעולה יש להזין את הסיסמה שלך.`,
+              run: () => bulk.mutate("unadmin"),
+            });
+          }}
         >
           הסרת הרשאת מנהל
         </Button>
