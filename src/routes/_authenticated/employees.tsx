@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { UserPlus, KeyRound, Check, Trash2 } from "lucide-react";
+import { UserPlus, KeyRound, Check, Trash2, Pencil } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminOnly } from "@/components/AdminOnly";
 import { fmtMoney } from "@/lib/time";
@@ -26,6 +26,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -373,6 +374,10 @@ function EmployeesPage() {
                   <div>טלפון: {p.phone || "—"}</div>
                   <div>ת״ז: {p.national_id || "—"}</div>
                   <div>לידה: {p.birth_date || "—"}</div>
+                  <EditDetailsDialog
+                    profile={p}
+                    onSaved={() => qc.invalidateQueries({ queryKey: ["employees"] })}
+                  />
                 </td>
                 <td className="p-3">
                   {p.is_approved ? (
