@@ -437,6 +437,7 @@ export type Database = {
           hours_budget: number | null
           id: string
           name: string
+          needs_admin_review: boolean
           notes: string | null
           start_date: string | null
           status: string
@@ -451,6 +452,7 @@ export type Database = {
           hours_budget?: number | null
           id?: string
           name: string
+          needs_admin_review?: boolean
           notes?: string | null
           start_date?: string | null
           status?: string
@@ -465,6 +467,7 @@ export type Database = {
           hours_budget?: number | null
           id?: string
           name?: string
+          needs_admin_review?: boolean
           notes?: string | null
           start_date?: string | null
           status?: string
