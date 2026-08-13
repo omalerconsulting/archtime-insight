@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Printer } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminOnly } from "@/components/AdminOnly";
+import { SortControls, sortRows, type SortDir } from "@/components/SortControls";
 import { daysBetween, fmtDate, fmtMoney, milestoneAmount, monthLabel, todayIso } from "@/lib/time";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +37,10 @@ export const Route = createFileRoute("/_authenticated/finance")({
 
 function FinancePage() {
   const qc = useQueryClient();
+  const [search, setSearch] = useState("");
+  const [lateOnly, setLateOnly] = useState(false);
+  const [sortBy, setSortBy] = useState("code");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
   const q = useQuery({
     queryKey: ["finance"],
     queryFn: async () => {
@@ -73,7 +78,7 @@ function FinancePage() {
     onError: () => toast.error("עדכון הגבייה נכשל"),
   });
 
-  const open = projects.flatMap((p) =>
+  const openAll = projects.flatMap((p) =>
     milestones
       .filter((m) => m.project_id === p.id && m.status !== "paid")
       .map((m) => {
@@ -95,13 +100,36 @@ function FinancePage() {
       .filter((r) => r.amount > 0),
   );
 
-  const totalOutstanding = open.reduce((s, r) => s + r.amount, 0);
-  const invoiced = open.filter((r) => r.milestone.status === "invoiced").reduce((s, r) => s + r.amount, 0);
-  const overdue = open.filter((r) => r.lateDays > 0);
+  const term = search.trim().toLowerCase();
+  const filteredOpen = openAll.filter(
+    (r) =>
+      (!lateOnly || r.lateDays > 0) &&
+      (!term ||
+        r.project.code.toLowerCase().includes(term) ||
+        r.project.name.toLowerCase().includes(term) ||
+        (r.project.client_name ?? "").toLowerCase().includes(term) ||
+        (r.milestone.title ?? "").toLowerCase().includes(term)),
+  );
+  const open = sortRows(filteredOpen, sortBy, sortDir, {
+    code: (r) => r.project.code,
+    name: (r) => r.project.name,
+    client: (r) => r.project.client_name ?? "",
+    stage: (r) => r.milestone.title ?? "",
+    amount: (r) => r.amount,
+    collected: (r) => r.collected,
+    due_date: (r) => r.milestone.due_date ?? "",
+    lateDays: (r) => r.lateDays,
+  });
+
+  const totalOutstanding = openAll.reduce((s, r) => s + r.amount, 0);
+  const invoiced = openAll
+    .filter((r) => r.milestone.status === "invoiced")
+    .reduce((s, r) => s + r.amount, 0);
+  const overdue = openAll.filter((r) => r.lateDays > 0);
   const overdueAmount = overdue.reduce((s, r) => s + r.amount, 0);
 
   const forecastMap = new Map<string, number>();
-  open.forEach((r) => {
+  openAll.forEach((r) => {
     const key = r.milestone.due_date ? r.milestone.due_date.slice(0, 7) : "unknown";
     forecastMap.set(key, (forecastMap.get(key) ?? 0) + r.amount);
   });
@@ -131,6 +159,39 @@ function FinancePage() {
           <Printer className="size-4" />
           הדפסת הרשימה
         </Button>
+      </div>
+
+      <div className="no-print flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card p-4 print:hidden">
+        <Input
+          className="w-64"
+          aria-label="חיפוש פרויקט או שלב"
+          placeholder="חיפוש לפי קוד, פרויקט, לקוח או שלב"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <Button variant={lateOnly ? "default" : "outline"} onClick={() => setLateOnly((v) => !v)}>
+          {lateOnly ? "מוצגות חריגות לו״ז בלבד" : "הצגת חריגות לו״ז בלבד"}
+        </Button>
+        <SortControls
+          id="finance-sort"
+          value={sortBy}
+          onValueChange={setSortBy}
+          dir={sortDir}
+          onDirChange={setSortDir}
+          options={[
+            { value: "code", label: "מספר פרויקט" },
+            { value: "name", label: "שם הפרויקט (א״ב)" },
+            { value: "client", label: "לקוח (א״ב)" },
+            { value: "stage", label: "שלב (א״ב)" },
+            { value: "amount", label: "יתרה לגבייה" },
+            { value: "collected", label: "נגבה בפועל" },
+            { value: "due_date", label: "תאריך לו״ז" },
+            { value: "lateDays", label: "ימי חריגה" },
+          ]}
+        />
+        <span className="text-sm text-muted-foreground">
+          מוצגות {open.length} מתוך {openAll.length} תחנות פתוחות
+        </span>
       </div>
 
       <div className="print-area space-y-6">

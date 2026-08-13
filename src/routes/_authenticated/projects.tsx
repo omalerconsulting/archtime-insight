@@ -5,6 +5,7 @@ import { AlertTriangle, Download, Plus, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminOnly } from "@/components/AdminOnly";
+import { SortControls, sortRows, type SortDir } from "@/components/SortControls";
 import { exportCsv } from "@/lib/csv";
 import { downloadProjectsTemplate, readSheetRows } from "@/lib/projects-import";
 import {
@@ -80,6 +81,8 @@ function ProjectsPage() {
   const [checked, setChecked] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("code");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [pendingDelete, setPendingDelete] = useState<string[] | null>(null);
 
   const projectsQ = useQuery({
@@ -112,7 +115,7 @@ function ProjectsPage() {
   const allProjects = projectsQ.data?.projects ?? [];
   const milestones = projectsQ.data?.milestones ?? [];
   const q = search.trim().toLowerCase();
-  const projects = allProjects.filter(
+  const filtered = allProjects.filter(
     (p) =>
       (statusFilter === "all" || p.status === statusFilter) &&
       (!q ||
@@ -120,6 +123,23 @@ function ProjectsPage() {
         p.name.toLowerCase().includes(q) ||
         (p.client_name ?? "").toLowerCase().includes(q)),
   );
+  const paidOf = (id: string, fee: number) =>
+    milestones
+      .filter((m) => m.project_id === id)
+      .reduce((s, m) => {
+        const full = milestoneAmount(m.amount_type, Number(m.amount_value), fee);
+        return s + (m.status === "paid" ? full : Math.min(Number(m.paid_amount) || 0, full));
+      }, 0);
+  const projects = sortRows(filtered, sortBy, sortDir, {
+    code: (p) => p.code,
+    name: (p) => p.name,
+    client: (p) => p.client_name ?? "",
+    fee: (p) => Number(p.fee_total) || 0,
+    paid: (p) => paidOf(p.id, Number(p.fee_total) || 0),
+    outstanding: (p) => (Number(p.fee_total) || 0) - paidOf(p.id, Number(p.fee_total) || 0),
+    status: (p) => p.status,
+    start_date: (p) => p.start_date ?? "",
+  });
   const allChecked = projects.length > 0 && projects.every((p) => checked.includes(p.id));
   const toggle = (id: string) =>
     setChecked((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
@@ -194,6 +214,23 @@ function ProjectsPage() {
           </SelectContent>
         </Select>
         <span className="text-sm text-muted-foreground">{checked.length} מסומנים</span>
+        <SortControls
+          id="projects-sort"
+          value={sortBy}
+          onValueChange={setSortBy}
+          dir={sortDir}
+          onDirChange={setSortDir}
+          options={[
+            { value: "code", label: "מספר פרויקט" },
+            { value: "name", label: "שם הפרויקט (א״ב)" },
+            { value: "client", label: "לקוח (א״ב)" },
+            { value: "fee", label: "שכר טרחה" },
+            { value: "paid", label: "שולם" },
+            { value: "outstanding", label: "יתרה לגבייה" },
+            { value: "status", label: "סטטוס" },
+            { value: "start_date", label: "תאריך התחלה" },
+          ]}
+        />
         {checked.length > 0 && (
           <>
             <Button variant="outline" size="sm" onClick={() => setChecked([])}>
