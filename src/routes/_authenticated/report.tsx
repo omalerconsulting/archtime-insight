@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Check, Download, Mail, Printer, Undo2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
-import { fetchMonthEntries, fetchProjectDirectory, trimTime } from "@/lib/queries";
+import { dayHours, fetchMonthEntries, fetchProjectDirectory, trimTime } from "@/lib/queries";
 import { holidayFor } from "@/lib/holidays";
 import {
   absenceLabel,
@@ -124,14 +124,10 @@ function ReportPage() {
   );
 
   const rows = days.map((d) => {
-    const e = dataQ.data?.entries.find((x) => x.work_date === d);
+    const segs = (dataQ.data?.entries ?? []).filter((x) => x.work_date === d);
     const hrs = (dataQ.data?.projectHours ?? []).filter((x) => x.work_date === d);
-    const attendance = computeHours(
-      trimTime(e?.clock_in ?? null),
-      trimTime(e?.clock_out ?? null),
-      e?.break_minutes ?? 0,
-    );
-    return { date: d, entry: e, hrs, attendance, holiday: holidayFor(d) };
+    const attendance = dayHours(segs);
+    return { date: d, segs, hrs, attendance, holiday: holidayFor(d) };
   });
 
   const totals = rows.reduce(
@@ -142,7 +138,7 @@ function ReportPage() {
       acc.ot125 += s.ot125;
       acc.ot150 += s.ot150;
       if (r.attendance > 0) acc.workDays += 1;
-      if (r.entry?.absence_type) acc.absences += 1;
+      if (r.segs.some((s) => s.absence_type)) acc.absences += 1;
       return acc;
     },
     { total: 0, regular: 0, ot125: 0, ot150: 0, workDays: 0, absences: 0 },
@@ -250,11 +246,14 @@ function ReportPage() {
       rows.map((r) => [
         r.date,
         weekdayOf(r.date),
-        trimTime(r.entry?.clock_in ?? null).slice(0, 5),
-        trimTime(r.entry?.clock_out ?? null).slice(0, 5),
-        r.entry?.break_minutes ?? 0,
+        r.segs.map((s) => trimTime(s.clock_in).slice(0, 5)).join(" | "),
+        r.segs.map((s) => trimTime(s.clock_out).slice(0, 5) || "חסרה").join(" | "),
+        r.segs.reduce((s, x) => s + (x.break_minutes ?? 0), 0),
         r.attendance ? r.attendance.toFixed(2) : "",
-        absenceLabel(r.entry?.absence_type) || "",
+        r.segs
+          .map((s) => absenceLabel(s.absence_type))
+          .filter(Boolean)
+          .join(" | "),
         r.hrs.map((h) => `${projectCode(h.project_id)} ${Number(h.hours).toFixed(2)}`).join(" | "),
         r.holiday?.name ?? "",
       ]),
@@ -701,38 +700,71 @@ function ReportPage() {
                     {r.date.slice(8)}/{r.date.slice(5, 7)}
                   </td>
                   <td className="p-2">{weekdayOf(r.date)}</td>
-                  <td
-                    className={`p-2 ${r.entry?.manually_edited ? "font-semibold text-destructive" : ""}`}
-                  >
-                    {trimTime(r.entry?.clock_in ?? null) || "—"}
-                    {isAdmin && r.entry?.manually_edited && (
-                      <span className="block text-xs font-normal text-destructive">
-                        במקור: {trimTime(r.entry.original_clock_in ?? null) || "ללא"}
+                  <td className="p-2">
+                    {r.segs.length === 0
+                      ? "—"
+                      : r.segs.map((s) => (
+                          <span
+                            key={s.id}
+                            className={`block ${s.manually_edited ? "font-semibold text-destructive" : ""}`}
+                          >
+                            {trimTime(s.clock_in) || "—"}
+                            {isAdmin && s.manually_edited && (
+                              <span className="block text-xs font-normal text-destructive">
+                                במקור: {trimTime(s.original_clock_in ?? null) || "ללא"}
+                              </span>
+                            )}
+                          </span>
+                        ))}
+                  </td>
+                  <td className="p-2">
+                    {r.segs.length === 0
+                      ? "—"
+                      : r.segs.map((s) => (
+                          <span
+                            key={s.id}
+                            className={`block ${s.manually_edited || !s.clock_out ? "font-semibold text-destructive" : ""}`}
+                          >
+                            {trimTime(s.clock_out) || (s.clock_in ? "חסרה יציאה" : "—")}
+                            {isAdmin && s.manually_edited && (
+                              <span className="block text-xs font-normal text-destructive">
+                                במקור: {trimTime(s.original_clock_out ?? null) || "ללא"}
+                              </span>
+                            )}
+                          </span>
+                        ))}
+                  </td>
+                  <td className="p-2">
+                    {r.segs.length === 0
+                      ? 0
+                      : r.segs.map((s) => (
+                          <span
+                            key={s.id}
+                            className={`block ${s.manually_edited ? "font-semibold text-destructive" : ""}`}
+                          >
+                            {s.break_minutes ?? 0}
+                            {isAdmin && s.manually_edited && (
+                              <span className="block text-xs font-normal text-destructive">
+                                במקור: {s.original_break_minutes ?? 0}
+                              </span>
+                            )}
+                          </span>
+                        ))}
+                  </td>
+                  <td className="p-2">
+                    {r.attendance ? fmtHours(r.attendance) : "—"}
+                    {r.segs.length > 1 && (
+                      <span className="block text-xs text-muted-foreground">
+                        {r.segs.length} מקטעים
                       </span>
                     )}
                   </td>
-                  <td
-                    className={`p-2 ${r.entry?.manually_edited ? "font-semibold text-destructive" : ""}`}
-                  >
-                    {trimTime(r.entry?.clock_out ?? null) || "—"}
-                    {isAdmin && r.entry?.manually_edited && (
-                      <span className="block text-xs font-normal text-destructive">
-                        במקור: {trimTime(r.entry.original_clock_out ?? null) || "ללא"}
-                      </span>
-                    )}
+                  <td className="p-2">
+                    {r.segs
+                      .map((s) => absenceLabel(s.absence_type))
+                      .filter(Boolean)
+                      .join(", ") || "—"}
                   </td>
-                  <td
-                    className={`p-2 ${r.entry?.manually_edited ? "font-semibold text-destructive" : ""}`}
-                  >
-                    {r.entry?.break_minutes ?? 0}
-                    {isAdmin && r.entry?.manually_edited && (
-                      <span className="block text-xs font-normal text-destructive">
-                        במקור: {r.entry.original_break_minutes ?? 0}
-                      </span>
-                    )}
-                  </td>
-                  <td className="p-2">{r.attendance ? fmtHours(r.attendance) : "—"}</td>
-                  <td className="p-2">{absenceLabel(r.entry?.absence_type) || "—"}</td>
                   <td className="p-2">
                     {r.hrs.length ? r.hrs.map((h) => projectCode(h.project_id)).join(", ") : "—"}
                   </td>

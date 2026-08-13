@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { computeHours } from "@/lib/time";
 
 export type ProjectRef = {
   id: string;
@@ -69,4 +70,40 @@ export function trimTime(t: string | null) {
   if (!t) return "";
   const v = t.slice(0, 8);
   return v.length === 5 ? `${v}:00` : v;
+}
+
+/** שעות נוכחות של מקטע בודד (כניסה/יציאה בודדת), בניכוי הפסקות. */
+export function segmentHours(e: Partial<TimeEntry> | null | undefined) {
+  if (!e) return 0;
+  return computeHours(
+    trimTime(e.clock_in ?? null),
+    trimTime(e.clock_out ?? null),
+    e.break_minutes ?? 0,
+  );
+}
+
+/** סכום שעות הנוכחות של כל מקטעי היום. */
+export function dayHours(segments: Array<Partial<TimeEntry>> | undefined) {
+  return (segments ?? []).reduce((s, e) => s + segmentHours(e), 0);
+}
+
+/** מקטע פתוח = נרשמה כניסה אך לא יציאה. */
+export function isOpenSegment(e: Partial<TimeEntry> | null | undefined) {
+  return Boolean(e?.clock_in) && !e?.clock_out;
+}
+
+/** קיבוץ רשומות הנוכחות לפי תאריך, ממוינות לפי שעת הכניסה. */
+export function groupByDate<T extends { work_date: string; clock_in?: string | null }>(
+  entries: T[] | undefined,
+) {
+  const map = new Map<string, T[]>();
+  (entries ?? []).forEach((e) => {
+    const list = map.get(e.work_date) ?? [];
+    list.push(e);
+    map.set(e.work_date, list);
+  });
+  map.forEach((list) =>
+    list.sort((a, b) => (trimTime(a.clock_in ?? null) < trimTime(b.clock_in ?? null) ? -1 : 1)),
+  );
+  return map;
 }

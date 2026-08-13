@@ -1,0 +1,1 @@
+ALTER TABLE public.time_entries DROP CONSTRAINT IF EXISTS time_entries_user_id_work_date_key;

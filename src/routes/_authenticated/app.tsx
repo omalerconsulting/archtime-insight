@@ -19,7 +19,16 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { holidayFor } from "@/lib/holidays";
-import { fetchMonthEntries, fetchProjectDirectory, trimTime, type TimeEntry } from "@/lib/queries";
+import {
+  dayHours,
+  fetchMonthEntries,
+  fetchProjectDirectory,
+  groupByDate,
+  isOpenSegment,
+  segmentHours,
+  trimTime,
+  type TimeEntry,
+} from "@/lib/queries";
 import {
   ABSENCE_TYPES,
   absenceLabel,
@@ -223,11 +232,7 @@ function TimesheetPage() {
     return list;
   }, [range.days, year, month]);
 
-  const entryByDate = useMemo(() => {
-    const map = new Map<string, TimeEntry>();
-    monthQ.data?.entries.forEach((e) => map.set(e.work_date, e));
-    return map;
-  }, [monthQ.data]);
+  const segsByDate = useMemo(() => groupByDate(monthQ.data?.entries), [monthQ.data]);
 
   const hoursByDate = useMemo(() => {
     const map = new Map<string, number>();
@@ -242,46 +247,53 @@ function TimesheetPage() {
     let projects = 0;
     let absences = 0;
     days.forEach((d) => {
-      const e = entryByDate.get(d);
-      if (e?.absence_type) absences += 1;
-      attendance += computeHours(
-        trimTime(e?.clock_in ?? null),
-        trimTime(e?.clock_out ?? null),
-        e?.break_minutes ?? 0,
-      );
+      const segs = segsByDate.get(d) ?? [];
+      if (segs.some((e) => e.absence_type)) absences += 1;
+      attendance += dayHours(segs);
       projects += hoursByDate.get(d) ?? 0;
     });
     return { attendance, projects, absences };
-  }, [days, entryByDate, hoursByDate]);
+  }, [days, segsByDate, hoursByDate]);
 
-  /** Past working days with a clock-in but no clock-out and no absence. */
+  /** ימים עם מקטע פתוח (כניסה בלי יציאה) שדורש השלמה. מקטע פעיל של עכשיו אינו נחשב. */
   const missingOut = useMemo(() => {
     const today = todayIso();
     return days.filter((d) => {
-      if (d >= today) return false;
-      const e = entryByDate.get(d);
-      return Boolean(e?.clock_in) && !e?.clock_out && !e?.absence_type;
+      if (d > today) return false;
+      const open = (segsByDate.get(d) ?? []).filter(isOpenSegment);
+      // ביום שעבר – כל מקטע פתוח חסר יציאה. היום – מקטע אחד פתוח הוא המשמרת הנוכחית.
+      return d < today ? open.length > 0 : open.length > 1;
     });
-  }, [days, entryByDate]);
+  }, [days, segsByDate]);
 
-  const todayEntry = entryByDate.get(todayIso());
-  const onBreak = Boolean(todayEntry?.break_start);
+  const todaySegs = useMemo(() => segsByDate.get(todayIso()) ?? [], [segsByDate]);
+  const openSeg = useMemo(() => [...todaySegs].reverse().find(isOpenSegment) ?? null, [todaySegs]);
+  const onBreak = Boolean(openSeg?.break_start);
+  const todayBreakMinutes = todaySegs.reduce((s, e) => s + (e.break_minutes ?? 0), 0);
 
   const clockMutation = useMutation({
     mutationFn: async (kind: "in" | "out" | "break-start" | "break-end") => {
       const date = todayIso();
-      const existing = entryByDate.get(date);
+      const existing = openSeg;
       let payload: {
         clock_in?: string;
         clock_out?: string;
         break_minutes?: number;
         break_start?: string | null;
       } = {};
-      if (kind === "in") payload = { clock_in: nowTime() };
-      else if (kind === "out") {
+      if (kind === "in") {
+        if (existing) throw new Error("open-segment");
+        const { error } = await supabase
+          .from("time_entries")
+          .insert({ user_id: userId, work_date: date, clock_in: nowTime() });
+        if (error) throw error;
+        return;
+      }
+      if (!existing) throw new Error("no-open-segment");
+      if (kind === "out") {
         payload = { clock_out: nowTime() };
         // Close a forgotten open break on clock-out
-        if (existing?.break_start) {
+        if (existing.break_start) {
           payload.break_minutes =
             (existing.break_minutes ?? 0) +
             minutesBetween(trimTime(existing.break_start), nowTime());
@@ -290,37 +302,37 @@ function TimesheetPage() {
       } else if (kind === "break-start") {
         payload = { break_start: nowTime() };
       } else {
-        const start = existing?.break_start;
+        const start = existing.break_start;
         if (!start) throw new Error("no-break");
         payload = {
-          break_minutes:
-            (existing?.break_minutes ?? 0) + minutesBetween(trimTime(start), nowTime()),
+          break_minutes: (existing.break_minutes ?? 0) + minutesBetween(trimTime(start), nowTime()),
           break_start: null,
         };
       }
-      if (existing) {
-        const { error } = await supabase.from("time_entries").update(payload).eq("id", existing.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from("time_entries")
-          .insert({ user_id: userId, work_date: date, ...payload });
-        if (error) throw error;
-      }
+      const { error } = await supabase.from("time_entries").update(payload).eq("id", existing.id);
+      if (error) throw error;
     },
     onSuccess: (_d, kind) => {
       toast.success(
         kind === "in"
-          ? "נרשמה כניסה"
+          ? "נרשמה כניסה – נפתח מקטע חדש"
           : kind === "out"
-            ? "נרשמה יציאה"
+            ? "נרשמה יציאה – המקטע נסגר"
             : kind === "break-start"
               ? "יצאת להפסקה"
               : "חזרת מהפסקה – ההפסקה נרשמה",
       );
       qc.invalidateQueries({ queryKey: ["month"] });
+      qc.invalidateQueries({ queryKey: ["day"] });
     },
-    onError: () => toast.error("שמירת הדיווח נכשלה"),
+    onError: (e: Error) =>
+      toast.error(
+        e.message === "open-segment"
+          ? "יש מקטע פתוח – יש לרשום יציאה לפני כניסה חדשה"
+          : e.message === "no-open-segment"
+            ? "אין מקטע פתוח – יש לרשום כניסה תחילה"
+            : "שמירת הדיווח נכשלה",
+      ),
   });
 
   const timerMutation = useMutation({
@@ -394,10 +406,9 @@ function TimesheetPage() {
     ? projectsQ.data?.find((p) => p.id === activeTimer.project_id)
     : null;
 
-  const workedSince =
-    todayEntry?.clock_in && !todayEntry?.clock_out
-      ? elapsedLabel(`${todayIso()}T${trimTime(todayEntry.clock_in)}`)
-      : null;
+  const workedSince = openSeg?.clock_in
+    ? elapsedLabel(`${todayIso()}T${trimTime(openSeg.clock_in)}`)
+    : null;
 
   const todayRowRef = useRef<HTMLTableRowElement>(null);
   useEffect(() => {
@@ -514,12 +525,31 @@ function TimesheetPage() {
 
         <div className="rounded-xl border border-border bg-card p-5 md:col-span-2">
           <h2 className="mb-1 text-sm font-medium text-muted-foreground">שעון נוכחות – היום</h2>
-          <p className="mb-1 text-lg font-semibold">
-            {todayEntry?.clock_in
-              ? `כניסה ${trimTime(todayEntry.clock_in).slice(0, 5)}`
-              : "טרם נרשמה כניסה"}
-            {todayEntry?.clock_out ? ` · יציאה ${trimTime(todayEntry.clock_out).slice(0, 5)}` : ""}
-          </p>
+          {todaySegs.length === 0 ? (
+            <p className="mb-1 text-lg font-semibold">טרם נרשמה כניסה</p>
+          ) : (
+            <ul className="mb-2 space-y-1">
+              {todaySegs.map((s, i) => (
+                <li key={s.id} className="text-sm">
+                  <span className="font-semibold">מקטע {i + 1}:</span>{" "}
+                  <span className="tabular-nums">
+                    {trimTime(s.clock_in).slice(0, 5) || "—"} –{" "}
+                    {trimTime(s.clock_out).slice(0, 5) || "פתוח"}
+                  </span>
+                  {s.absence_type && (
+                    <span className="ms-2 text-muted-foreground">{absenceLabel(s.absence_type)}</span>
+                  )}
+                  <span className="ms-2 tabular-nums text-muted-foreground">
+                    {segmentHours(s) ? `${hoursToDuration(segmentHours(s))} ש'` : ""}
+                  </span>
+                </li>
+              ))}
+              <li className="text-sm font-semibold">
+                סה״כ היום:{" "}
+                <span className="tabular-nums">{hoursToDuration(dayHours(todaySegs))}</span>
+              </li>
+            </ul>
+          )}
           {workedSince && (
             <p className="mb-3 text-sm text-muted-foreground" dir="rtl">
               בעבודה כבר <span className="font-semibold tabular-nums">{workedSince}</span> שעות
@@ -530,7 +560,7 @@ function TimesheetPage() {
               size="lg"
               className="min-w-28"
               onClick={() => clockMutation.mutate("in")}
-              disabled={clockMutation.isPending}
+              disabled={clockMutation.isPending || Boolean(openSeg)}
             >
               <LogIn className="size-4" />
               כניסה
@@ -540,7 +570,7 @@ function TimesheetPage() {
               variant="outline"
               className="min-w-28"
               onClick={() => clockMutation.mutate("out")}
-              disabled={clockMutation.isPending}
+              disabled={clockMutation.isPending || !openSeg}
             >
               <LogOut className="size-4" />
               יציאה
@@ -548,7 +578,7 @@ function TimesheetPage() {
             <Button
               variant="outline"
               onClick={() => clockMutation.mutate("break-start")}
-              disabled={clockMutation.isPending || onBreak}
+              disabled={clockMutation.isPending || onBreak || !openSeg}
             >
               <Coffee className="size-4" />
               יציאה להפסקה
@@ -564,8 +594,10 @@ function TimesheetPage() {
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
             {onBreak
-              ? `בהפסקה מאז ${trimTime(todayEntry?.break_start ?? null).slice(0, 5)} · סה"כ הפסקות היום: ${todayEntry?.break_minutes ?? 0} דק'`
-              : `סה"כ הפסקות היום: ${todayEntry?.break_minutes ?? 0} דק'`}
+              ? `בהפסקה מאז ${trimTime(openSeg?.break_start ?? null).slice(0, 5)} · סה"כ הפסקות היום: ${todayBreakMinutes} דק'`
+              : openSeg
+                ? `סה"כ הפסקות היום: ${todayBreakMinutes} דק'`
+                : `סה"כ הפסקות היום: ${todayBreakMinutes} דק' · אין מקטע פתוח – לחיצה על "כניסה" תפתח מקטע חדש`}
           </p>
 
           <div className="mt-5 border-t border-border pt-4">
@@ -687,17 +719,14 @@ function TimesheetPage() {
       {/* ===== Mobile: day cards ===== */}
       <section className="space-y-2 md:hidden">
         {days.map((d) => {
-          const e = entryByDate.get(d);
-          const attendance = computeHours(
-            trimTime(e?.clock_in ?? null),
-            trimTime(e?.clock_out ?? null),
-            e?.break_minutes ?? 0,
-          );
+          const segs = segsByDate.get(d) ?? [];
+          const attendance = dayHours(segs);
+          const absence = segs.find((s) => s.absence_type)?.absence_type ?? null;
           const proj = hoursByDate.get(d) ?? 0;
           const holiday = holidayFor(d);
           const isToday = d === todayIso();
           const missing = missingOut.includes(d);
-          const empty = !e && !holiday && proj === 0;
+          const empty = segs.length === 0 && !holiday && proj === 0;
           if (empty && d > todayIso()) return null;
           return (
             <button
@@ -717,16 +746,17 @@ function TimesheetPage() {
                   {isToday && <span className="ms-2 text-xs font-normal text-primary">היום</span>}
                 </span>
                 <span className="text-sm tabular-nums">
-                  {attendance
-                    ? fmtHours(attendance)
-                    : e?.absence_type
-                      ? absenceLabel(e.absence_type)
-                      : "—"}
+                  {attendance ? fmtHours(attendance) : absence ? absenceLabel(absence) : "—"}
                 </span>
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                {e?.clock_in && <span>כניסה {trimTime(e.clock_in).slice(0, 5)}</span>}
-                {e?.clock_out && <span>יציאה {trimTime(e.clock_out).slice(0, 5)}</span>}
+                {segs.map((s) => (
+                  <span key={s.id} className="tabular-nums">
+                    {trimTime(s.clock_in).slice(0, 5) || "—"}–
+                    {trimTime(s.clock_out).slice(0, 5) || "פתוח"}
+                  </span>
+                ))}
+                {segs.length > 1 && <span>{segs.length} מקטעים</span>}
                 {missing && <span className="font-semibold text-destructive">חסרה יציאה</span>}
                 {proj > 0 && <span>פרויקטים {hoursToDuration(proj)}</span>}
                 {holiday && <span>{holiday.name}</span>}
@@ -776,12 +806,15 @@ function TimesheetPage() {
           </thead>
           <tbody>
             {days.map((d) => {
-              const e = entryByDate.get(d);
-              const attendance = computeHours(
-                trimTime(e?.clock_in ?? null),
-                trimTime(e?.clock_out ?? null),
-                e?.break_minutes ?? 0,
-              );
+              const segs = segsByDate.get(d) ?? [];
+              const attendance = dayHours(segs);
+              const manual = segs.some((s) => s.manually_edited);
+              const absences = segs
+                .map((s) => absenceLabel(s.absence_type))
+                .filter(Boolean)
+                .join(", ");
+              const breakTotal = segs.reduce((s, x) => s + (x.break_minutes ?? 0), 0);
+              const openCount = segs.filter(isOpenSegment).length;
               const proj = hoursByDate.get(d) ?? 0;
               const mismatch = attendance > 0 && hoursGap(attendance, proj) > 0.5;
               const weekend = ["שישי", "שבת"].includes(weekdayOf(d));
@@ -810,27 +843,42 @@ function TimesheetPage() {
                   </td>
                   <td className="p-3">{weekdayOf(d)}</td>
                   <td
-                    className={`p-3 tabular-nums ${e?.manually_edited ? "font-semibold text-destructive" : ""}`}
+                    className={`p-3 tabular-nums ${manual ? "font-semibold text-destructive" : ""}`}
                   >
-                    {trimTime(e?.clock_in ?? null).slice(0, 5) || "—"}
+                    {segs.length === 0
+                      ? "—"
+                      : segs.map((s) => (
+                          <div key={s.id}>{trimTime(s.clock_in).slice(0, 5) || "—"}</div>
+                        ))}
                   </td>
                   <td
-                    className={`p-3 tabular-nums ${e?.manually_edited ? "font-semibold text-destructive" : ""}`}
+                    className={`p-3 tabular-nums ${manual ? "font-semibold text-destructive" : ""}`}
                   >
-                    {trimTime(e?.clock_out ?? null).slice(0, 5) ||
-                      (missing ? (
-                        <span className="font-semibold text-destructive">חסרה</span>
-                      ) : (
-                        "—"
-                      ))}
+                    {segs.length === 0
+                      ? "—"
+                      : segs.map((s) => (
+                          <div key={s.id}>
+                            {trimTime(s.clock_out).slice(0, 5) ||
+                              (missing ? (
+                                <span className="font-semibold text-destructive">חסרה</span>
+                              ) : (
+                                <span className="text-muted-foreground">פתוח</span>
+                              ))}
+                          </div>
+                        ))}
                   </td>
                   <td
-                    className={`p-3 tabular-nums ${e?.manually_edited ? "font-semibold text-destructive" : ""}`}
+                    className={`p-3 tabular-nums ${manual ? "font-semibold text-destructive" : ""}`}
                   >
-                    {e?.break_minutes ?? 0}
+                    {breakTotal}
                   </td>
                   <td className="p-3 font-medium tabular-nums">
                     {attendance ? fmtHours(attendance) : "—"}
+                    {segs.length > 1 && (
+                      <span className="ms-1 text-xs text-muted-foreground">
+                        ({segs.length} מקטעים)
+                      </span>
+                    )}
                   </td>
                   <td className={`p-3 tabular-nums ${mismatch ? "text-destructive" : ""}`}>
                     {proj ? hoursToDuration(proj) : "—"}
@@ -841,7 +889,7 @@ function TimesheetPage() {
                       />
                     )}
                   </td>
-                  <td className="p-3">{absenceLabel(e?.absence_type) || "—"}</td>
+                  <td className="p-3">{absences || "—"}</td>
                   <td className="p-3">
                     {holiday ? (
                       <span className={holiday.restDay ? "font-medium" : "text-muted-foreground"}>
@@ -856,7 +904,12 @@ function TimesheetPage() {
                     <Button size="sm" variant="ghost" onClick={() => setEditDate(d)}>
                       {monthLocked ? "צפייה" : "עריכה"}
                     </Button>
-                    {e?.manually_edited && (
+                    {openCount > 0 && d < todayIso() && (
+                      <span className="ms-1 text-xs font-semibold text-destructive">
+                        מקטע לא נסגר
+                      </span>
+                    )}
+                    {manual && (
                       <span className="ms-1 text-xs text-destructive">עודכן ידנית</span>
                     )}
                   </td>
@@ -892,6 +945,20 @@ function StatCard({ title, value, warn }: { title: string; value: string; warn?:
   );
 }
 
+
+type SegForm = {
+  id?: string;
+  clock_in: string;
+  clock_out: string;
+  break_minutes: string;
+  absence_type: string;
+  note: string;
+};
+
+function emptySeg(): SegForm {
+  return { clock_in: "", clock_out: "", break_minutes: "0", absence_type: "none", note: "" };
+}
+
 function DayEditor({
   date,
   userId,
@@ -910,38 +977,40 @@ function DayEditor({
   const dayQ = useQuery({
     queryKey: ["day", userId, date],
     queryFn: async () => {
-      const [entry, hours] = await Promise.all([
+      const [entries, hours] = await Promise.all([
         supabase
           .from("time_entries")
           .select("*")
           .eq("user_id", userId)
           .eq("work_date", date)
-          .maybeSingle(),
+          .order("clock_in", { ascending: true, nullsFirst: true }),
         supabase.from("project_hours").select("*").eq("user_id", userId).eq("work_date", date),
       ]);
-      return { entry: entry.data, hours: hours.data ?? [] };
+      if (entries.error) throw entries.error;
+      return { entries: (entries.data ?? []) as TimeEntry[], hours: hours.data ?? [] };
     },
   });
 
-  const [form, setForm] = useState<{
-    clock_in: string;
-    clock_out: string;
-    break_minutes: string;
-    absence_type: string;
-    note: string;
-  } | null>(null);
+  const [segs, setSegs] = useState<SegForm[] | null>(null);
   const [rows, setRows] = useState<DayRow[] | null>(null);
+  const [removed, setRemoved] = useState<string[]>([]);
 
   // Initialize the form once the day query resolves (proper effect, not render-time setState).
   useEffect(() => {
     if (!dayQ.data) return;
-    setForm({
-      clock_in: trimTime(dayQ.data.entry?.clock_in ?? null).slice(0, 5),
-      clock_out: trimTime(dayQ.data.entry?.clock_out ?? null).slice(0, 5),
-      break_minutes: String(dayQ.data.entry?.break_minutes ?? 0),
-      absence_type: dayQ.data.entry?.absence_type ?? "none",
-      note: dayQ.data.entry?.note ?? "",
-    });
+    setSegs(
+      dayQ.data.entries.length
+        ? dayQ.data.entries.map((e) => ({
+            id: e.id,
+            clock_in: trimTime(e.clock_in).slice(0, 5),
+            clock_out: trimTime(e.clock_out).slice(0, 5),
+            break_minutes: String(e.break_minutes ?? 0),
+            absence_type: e.absence_type ?? "none",
+            note: e.note ?? "",
+          }))
+        : [emptySeg()],
+    );
+    setRemoved([]);
     setRows(
       dayQ.data.hours.map((h) => ({
         id: h.id,
@@ -952,29 +1021,57 @@ function DayEditor({
     );
   }, [dayQ.data]);
 
+  const existingById = useMemo(() => {
+    const m = new Map<string, TimeEntry>();
+    dayQ.data?.entries.forEach((e) => m.set(e.id, e));
+    return m;
+  }, [dayQ.data]);
+
   const save = useMutation({
     mutationFn: async () => {
-      if (!form || !rows) return;
+      if (!segs || !rows) return;
       if (locked) throw new Error("locked");
-      const existing = dayQ.data?.entry as Partial<TimeEntry> | null | undefined;
-      const changed =
-        (normalizeTime(form.clock_in) || null) !== (existing?.clock_in ?? null) ||
-        (normalizeTime(form.clock_out) || null) !== (existing?.clock_out ?? null) ||
-        (Number(form.break_minutes) || 0) !== (existing?.break_minutes ?? 0);
-      const payload = {
-        user_id: userId,
-        work_date: date,
-        clock_in: normalizeTime(form.clock_in) || null,
-        clock_out: normalizeTime(form.clock_out) || null,
-        break_minutes: Number(form.break_minutes) || 0,
-        absence_type: form.absence_type === "none" ? null : form.absence_type,
-        note: form.note || null,
-        ...(!isAdmin && changed ? manualMeta(existing) : {}),
-      };
-      const { error: upErr } = await supabase
-        .from("time_entries")
-        .upsert(payload, { onConflict: "user_id,work_date" });
-      if (upErr) throw upErr;
+
+      if (removed.length) {
+        const { error } = await supabase.from("time_entries").delete().in("id", removed);
+        if (error) throw error;
+      }
+
+      for (const s of segs) {
+        const clockIn = normalizeTime(s.clock_in) || null;
+        const clockOut = normalizeTime(s.clock_out) || null;
+        const absence = s.absence_type === "none" ? null : s.absence_type;
+        const isEmpty = !clockIn && !clockOut && !absence && !s.note && !Number(s.break_minutes);
+        if (isEmpty) {
+          if (s.id) {
+            const { error } = await supabase.from("time_entries").delete().eq("id", s.id);
+            if (error) throw error;
+          }
+          continue;
+        }
+        const existing = s.id ? existingById.get(s.id) : undefined;
+        const changed =
+          clockIn !== (existing?.clock_in ?? null) ||
+          clockOut !== (existing?.clock_out ?? null) ||
+          (Number(s.break_minutes) || 0) !== (existing?.break_minutes ?? 0);
+        const payload = {
+          user_id: userId,
+          work_date: date,
+          clock_in: clockIn,
+          clock_out: clockOut,
+          break_minutes: Number(s.break_minutes) || 0,
+          absence_type: absence,
+          note: s.note || null,
+          ...(!isAdmin && changed ? manualMeta(existing) : {}),
+        };
+        if (s.id) {
+          const { error } = await supabase.from("time_entries").update(payload).eq("id", s.id);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase.from("time_entries").insert(payload);
+          if (error) throw error;
+        }
+      }
 
       const { error: delErr } = await supabase
         .from("project_hours")
@@ -1011,10 +1108,16 @@ function DayEditor({
       ),
   });
 
-  const attendance = form
-    ? computeHours(form.clock_in, form.clock_out, Number(form.break_minutes) || 0)
-    : 0;
+  const patchSeg = (idx: number, patch: Partial<SegForm>) =>
+    setSegs((cur) => (cur ?? []).map((s, i) => (i === idx ? { ...s, ...patch } : s)));
+
+  const segHoursOf = (s: SegForm) =>
+    computeHours(s.clock_in, s.clock_out, Number(s.break_minutes) || 0);
+
+  const attendance = (segs ?? []).reduce((sum, s) => sum + segHoursOf(s), 0);
   const projectTotal = (rows ?? []).reduce((s, r) => s + durationToHours(r.hours), 0);
+  const openSegs = (segs ?? []).filter((s) => s.clock_in && !s.clock_out);
+  const hasChoiceDay = (segs ?? []).some((s) => s.absence_type === "choice_day");
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -1025,81 +1128,160 @@ function DayEditor({
           </DialogTitle>
         </DialogHeader>
 
-        {form && rows && (
+        {segs && rows && (
           <div className="space-y-6">
             {locked && (
               <p className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm font-medium text-destructive">
                 תקופת הדיווח נעולה – ניתן לצפות בלבד. לעדכון בדיעבד יש לפנות למנהל.
               </p>
             )}
-            <div className="grid gap-4 sm:grid-cols-4">
-              <fieldset disabled={locked} className="contents">
-                <div className="space-y-2">
-                  <Label htmlFor="ci">שעת כניסה</Label>
-                  <TimeField
-                    id="ci"
-                    value={form.clock_in}
-                    onChange={(v) => setForm({ ...form, clock_in: v })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="co">שעת יציאה</Label>
-                  <TimeField
-                    id="co"
-                    value={form.clock_out}
-                    onChange={(v) => setForm({ ...form, clock_out: v })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="br">הפסקה (דקות)</Label>
-                  <Input
-                    id="br"
-                    type="number"
-                    min={0}
-                    value={form.break_minutes}
-                    onChange={(e) => setForm({ ...form, break_minutes: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="ab">היעדרות</Label>
-                  <Select
-                    value={form.absence_type}
-                    onValueChange={(v) => setForm({ ...form, absence_type: v })}
-                    disabled={locked}
-                  >
-                    <SelectTrigger id="ab">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">ללא</SelectItem>
-                      {ABSENCE_TYPES.map((a) => (
-                        <SelectItem key={a.value} value={a.value}>
-                          {a.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {form.absence_type === "choice_day" && (
-                    <p className="text-xs text-muted-foreground">
-                      יום בחירה: על פי חוק חופשה שנתית, עובד רשאי לבחור יום חופשה אחד בשנה באחד
-                      מהמועדים הקבועים בתוספת לחוק (למשל צום גדליה, ערב יום כיפור, פורים, יום
-                      הזיכרון, ל״ג בעומר, ט׳ באב, ערבי חג ועוד), בהודעה למעסיק 30 ימים מראש. היום
-                      מנוכה ממכסת החופשה השנתית.
-                    </p>
-                  )}
-                </div>
-              </fieldset>
-            </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="note">הערה</Label>
-              <Textarea
-                id="note"
-                rows={2}
-                disabled={locked}
-                value={form.note}
-                onChange={(e) => setForm({ ...form, note: e.target.value })}
-              />
+            {openSegs.length > 0 && (
+              <p
+                role="alert"
+                className="rounded-lg border border-warning/50 bg-warning/10 p-3 text-sm font-medium"
+              >
+                <AlertTriangle className="me-2 inline size-4 text-warning" aria-hidden />
+                {openSegs.length === 1
+                  ? "יש מקטע ללא שעת יציאה – יש להשלים כדי שהשעות ייספרו."
+                  : `יש ${openSegs.length} מקטעים ללא שעת יציאה – יש להשלים כדי שהשעות ייספרו.`}
+              </p>
+            )}
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold">מקטעי נוכחות ביום</h3>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={locked}
+                  onClick={() => setSegs([...(segs ?? []), emptySeg()])}
+                >
+                  <Plus className="size-4" />
+                  הוספת מקטע
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                ניתן לפצל את היום לכמה מקטעים – למשל סיור בשטח בבוקר ועבודה על פרויקטים אחר הצהריים.
+                כל המקטעים נסכמים לדוח השעות.
+              </p>
+
+              {segs.map((s, idx) => (
+                <div key={s.id ?? `new-${idx}`} className="rounded-xl border border-border p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-sm font-medium">
+                      מקטע {idx + 1}
+                      {segHoursOf(s) > 0 && (
+                        <span className="ms-2 tabular-nums text-muted-foreground">
+                          {hoursToDuration(segHoursOf(s))} שעות
+                        </span>
+                      )}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="מחיקת מקטע"
+                      disabled={locked || segs.length === 1}
+                      onClick={() => {
+                        if (s.id) setRemoved((r) => [...r, s.id!]);
+                        setSegs(segs.filter((_, i) => i !== idx));
+                      }}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-4">
+                    <fieldset disabled={locked} className="contents">
+                      <div className="space-y-2">
+                        <Label htmlFor={`ci-${idx}`}>שעת כניסה</Label>
+                        <div className="flex gap-1">
+                          <TimeField
+                            id={`ci-${idx}`}
+                            value={s.clock_in}
+                            onChange={(v) => patchSeg(idx, { clock_in: v })}
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={locked}
+                            onClick={() => patchSeg(idx, { clock_in: nowTime().slice(0, 5) })}
+                          >
+                            עכשיו
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor={`co-${idx}`}>שעת יציאה</Label>
+                        <div className="flex gap-1">
+                          <TimeField
+                            id={`co-${idx}`}
+                            value={s.clock_out}
+                            onChange={(v) => patchSeg(idx, { clock_out: v })}
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={locked}
+                            onClick={() => patchSeg(idx, { clock_out: nowTime().slice(0, 5) })}
+                          >
+                            עכשיו
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor={`br-${idx}`}>הפסקה (דקות)</Label>
+                        <Input
+                          id={`br-${idx}`}
+                          type="number"
+                          min={0}
+                          value={s.break_minutes}
+                          onChange={(e) => patchSeg(idx, { break_minutes: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor={`ab-${idx}`}>סוג המקטע / היעדרות</Label>
+                        <Select
+                          value={s.absence_type}
+                          onValueChange={(v) => patchSeg(idx, { absence_type: v })}
+                          disabled={locked}
+                        >
+                          <SelectTrigger id={`ab-${idx}`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">עבודה רגילה</SelectItem>
+                            {ABSENCE_TYPES.map((a) => (
+                              <SelectItem key={a.value} value={a.value}>
+                                {a.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </fieldset>
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    <Label htmlFor={`note-${idx}`}>הערה</Label>
+                    <Textarea
+                      id={`note-${idx}`}
+                      rows={2}
+                      disabled={locked}
+                      value={s.note}
+                      onChange={(e) => patchSeg(idx, { note: e.target.value })}
+                    />
+                  </div>
+                </div>
+              ))}
+
+              {hasChoiceDay && (
+                <p className="text-xs text-muted-foreground">
+                  יום בחירה: על פי חוק חופשה שנתית, עובד רשאי לבחור יום חופשה אחד בשנה באחד מהמועדים
+                  הקבועים בתוספת לחוק (למשל צום גדליה, ערב יום כיפור, פורים, יום הזיכרון, ל״ג בעומר,
+                  ט׳ באב, ערבי חג ועוד), בהודעה למעסיק 30 ימים מראש. היום מנוכה ממכסת החופשה השנתית.
+                </p>
+              )}
             </div>
 
             <div>
@@ -1185,7 +1367,7 @@ function DayEditor({
                     : "text-muted-foreground"
                 }`}
               >
-                שעות נוכחות: {hoursToDuration(attendance)} · שעות פרויקטים:{" "}
+                שעות נוכחות ({segs.length} מקטעים): {hoursToDuration(attendance)} · שעות פרויקטים:{" "}
                 {hoursToDuration(projectTotal)}
               </p>
             </div>
