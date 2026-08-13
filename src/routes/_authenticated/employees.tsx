@@ -559,6 +559,50 @@ function EmployeesPage() {
           </tbody>
         </table>
       </div>
+
+      <Dialog
+        open={Boolean(roleConfirm)}
+        onOpenChange={(o) => {
+          if (!o) {
+            setRoleConfirm(null);
+            setAdminPassword("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{roleConfirm?.title}</DialogTitle>
+            <DialogDescription>{roleConfirm?.description}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="role-confirm-password">הסיסמה שלך</Label>
+            <Input
+              id="role-confirm-password"
+              type="password"
+              autoComplete="current-password"
+              value={adminPassword}
+              onChange={(e) => setAdminPassword(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void verifyAndRun();
+              }}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setRoleConfirm(null);
+                setAdminPassword("");
+              }}
+            >
+              ביטול
+            </Button>
+            <Button disabled={verifying} onClick={() => void verifyAndRun()}>
+              {verifying ? "מאמת…" : "אישור"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
