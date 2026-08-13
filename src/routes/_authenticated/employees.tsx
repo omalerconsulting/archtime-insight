@@ -619,7 +619,15 @@ function ResetPasswordDialogInner({ userId, name }: { userId: string; name: stri
 
 function NewUserDialogInner({ onCreated }: { onCreated: () => void }) {
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ full_name: "", email: "", password: "", is_admin: false });
+  const [form, setForm] = useState({
+    full_name: "",
+    email: "",
+    phone: "",
+    national_id: "",
+    birth_date: "",
+    password: "",
+    is_admin: false,
+  });
   const create = useServerFn(createEmployee);
 
   const mut = useMutation({
@@ -631,7 +639,15 @@ function NewUserDialogInner({ onCreated }: { onCreated: () => void }) {
     },
     onSuccess: () => {
       toast.success("המשתמש נוצר בהצלחה");
-      setForm({ full_name: "", email: "", password: "", is_admin: false });
+      setForm({
+        full_name: "",
+        email: "",
+        phone: "",
+        national_id: "",
+        birth_date: "",
+        password: "",
+        is_admin: false,
+      });
       setOpen(false);
       onCreated();
     },
@@ -676,6 +692,34 @@ function NewUserDialogInner({ onCreated }: { onCreated: () => void }) {
               type="text"
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="nu-phone">מספר טלפון</Label>
+            <Input
+              id="nu-phone"
+              type="tel"
+              value={form.phone}
+              onChange={(e) => setForm({ ...form, phone: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="nu-nid">תעודת זהות</Label>
+            <Input
+              id="nu-nid"
+              inputMode="numeric"
+              maxLength={20}
+              value={form.national_id}
+              onChange={(e) => setForm({ ...form, national_id: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="nu-bdate">תאריך לידה</Label>
+            <Input
+              id="nu-bdate"
+              type="date"
+              value={form.birth_date}
+              onChange={(e) => setForm({ ...form, birth_date: e.target.value })}
             />
           </div>
           <div className="flex items-center gap-3">
