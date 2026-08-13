@@ -5,7 +5,8 @@ import { AlertTriangle, Download, Plus, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminOnly } from "@/components/AdminOnly";
-import { exportCsv, parseCsv } from "@/lib/csv";
+import { exportCsv } from "@/lib/csv";
+import { downloadProjectsTemplate, readSheetRows } from "@/lib/projects-import";
 import {
   daysBetween,
   fmtDate,
@@ -1079,10 +1080,9 @@ function ImportCsvDialog({
     הערות: "notes",
   };
 
-  function onFile(file: File) {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const rows = parseCsv(String(reader.result ?? ""));
+  async function onFile(file: File) {
+    try {
+      const rows = await readSheetRows(file);
       if (rows.length < 2) {
         setErrors(["הקובץ ריק או שאין בו שורת כותרות + נתונים."]);
         setPreview([]);
@@ -1129,8 +1129,10 @@ function ImportCsvDialog({
       });
       setErrors(errs);
       setPreview(parsed);
-    };
-    reader.readAsText(file, "utf-8");
+    } catch {
+      setPreview([]);
+      setErrors(["לא ניתן לקרוא את הקובץ. יש להשתמש בקובץ Excel (xlsx) או CSV."]);
+    }
   }
 
   async function doImport() {
@@ -1171,26 +1173,30 @@ function ImportCsvDialog({
       <DialogTrigger asChild>
         <Button variant="outline">
           <Upload className="size-4" />
-          ייבוא מ‑CSV
+          ייבוא מאקסל
         </Button>
       </DialogTrigger>
       <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>ייבוא פרויקטים מקובץ CSV</DialogTitle>
+          <DialogTitle>ייבוא פרויקטים מקובץ אקסל</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <p className="rounded-lg bg-muted p-3 text-sm text-muted-foreground">
-            הקובץ צריך שורת כותרות עם העמודות: קוד, שם, לקוח, שכר טרחה, תקציב שעות, תאריך התחלה
-            (YYYY-MM-DD), הערות. קוד ושם הן חובה; השאר רשות. שמירה מאקסל: קובץ ← שמירה בשם ← CSV
-            UTF-8. פרויקט עם קוד קיים יעודכן במקום להיווצר כפול.
+            ניתן להעלות קובץ Excel (xlsx) או CSV. שורה 1 היא שורת כותרות עם העמודות: קוד, שם
+            הפרויקט, לקוח, שכר טרחה, תקציב שעות, תאריך התחלה (YYYY-MM-DD), הערות. קוד ושם הם חובה;
+            השאר רשות. פרויקט עם קוד קיים יעודכן במקום להיווצר כפול. מומלץ להתחיל מקובץ הדוגמה.
           </p>
+          <Button variant="secondary" onClick={() => void downloadProjectsTemplate()}>
+            <Download className="size-4" />
+            הורדת גליון לדוגמה (xlsx)
+          </Button>
           <Input
             type="file"
-            accept=".csv,text/csv"
-            aria-label="בחירת קובץ CSV"
+            accept=".xlsx,.xlsm,.xlsb,.xls,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            aria-label="בחירת קובץ אקסל או CSV"
             onChange={(e) => {
               const f = e.target.files?.[0];
-              if (f) onFile(f);
+              if (f) void onFile(f);
             }}
           />
           {errors.length > 0 && (
