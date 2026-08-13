@@ -6,6 +6,9 @@ const schema = z.object({
   email: z.string().trim().email().max(255),
   password: z.string().min(8).max(72),
   full_name: z.string().trim().max(120).default(""),
+  phone: z.string().trim().max(25).optional().default(""),
+  national_id: z.string().trim().max(20).optional().default(""),
+  birth_date: z.string().trim().max(10).optional().default(""),
   is_admin: z.boolean().default(false),
 });
 
@@ -26,14 +29,27 @@ export const createEmployee = createServerFn({ method: "POST" })
       email: data.email,
       password: data.password,
       email_confirm: true,
-      user_metadata: { full_name: data.full_name },
+      user_metadata: {
+        full_name: data.full_name,
+        phone: data.phone,
+        national_id: data.national_id,
+        birth_date: data.birth_date,
+      },
     });
     if (created.error) throw new Error(created.error.message);
     const newId = created.data.user!.id;
 
     await supabaseAdmin
       .from("profiles")
-      .upsert({ id: newId, full_name: data.full_name, email: data.email, is_approved: true });
+      .upsert({
+        id: newId,
+        full_name: data.full_name,
+        email: data.email,
+        phone: data.phone || null,
+        national_id: data.national_id || null,
+        birth_date: data.birth_date || null,
+        is_approved: true,
+      });
 
     if (data.is_admin) {
       await supabaseAdmin.from("user_roles").upsert(

@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { UserPlus, KeyRound, Check, Trash2 } from "lucide-react";
+import { UserPlus, KeyRound, Check, Trash2, Pencil } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminOnly } from "@/components/AdminOnly";
 import { fmtMoney } from "@/lib/time";
@@ -26,6 +26,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -373,6 +374,10 @@ function EmployeesPage() {
                   <div>טלפון: {p.phone || "—"}</div>
                   <div>ת״ז: {p.national_id || "—"}</div>
                   <div>לידה: {p.birth_date || "—"}</div>
+                  <EditDetailsDialog
+                    profile={p}
+                    onSaved={() => qc.invalidateQueries({ queryKey: ["employees"] })}
+                  />
                 </td>
                 <td className="p-3">
                   {p.is_approved ? (
@@ -614,7 +619,15 @@ function ResetPasswordDialogInner({ userId, name }: { userId: string; name: stri
 
 function NewUserDialogInner({ onCreated }: { onCreated: () => void }) {
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ full_name: "", email: "", password: "", is_admin: false });
+  const [form, setForm] = useState({
+    full_name: "",
+    email: "",
+    phone: "",
+    national_id: "",
+    birth_date: "",
+    password: "",
+    is_admin: false,
+  });
   const create = useServerFn(createEmployee);
 
   const mut = useMutation({
@@ -626,7 +639,15 @@ function NewUserDialogInner({ onCreated }: { onCreated: () => void }) {
     },
     onSuccess: () => {
       toast.success("המשתמש נוצר בהצלחה");
-      setForm({ full_name: "", email: "", password: "", is_admin: false });
+      setForm({
+        full_name: "",
+        email: "",
+        phone: "",
+        national_id: "",
+        birth_date: "",
+        password: "",
+        is_admin: false,
+      });
       setOpen(false);
       onCreated();
     },
@@ -673,6 +694,34 @@ function NewUserDialogInner({ onCreated }: { onCreated: () => void }) {
               onChange={(e) => setForm({ ...form, password: e.target.value })}
             />
           </div>
+          <div className="space-y-2">
+            <Label htmlFor="nu-phone">מספר טלפון</Label>
+            <Input
+              id="nu-phone"
+              type="tel"
+              value={form.phone}
+              onChange={(e) => setForm({ ...form, phone: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="nu-nid">תעודת זהות</Label>
+            <Input
+              id="nu-nid"
+              inputMode="numeric"
+              maxLength={20}
+              value={form.national_id}
+              onChange={(e) => setForm({ ...form, national_id: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="nu-bdate">תאריך לידה</Label>
+            <Input
+              id="nu-bdate"
+              type="date"
+              value={form.birth_date}
+              onChange={(e) => setForm({ ...form, birth_date: e.target.value })}
+            />
+          </div>
           <div className="flex items-center gap-3">
             <Switch
               id="nu-admin"
@@ -688,6 +737,125 @@ function NewUserDialogInner({ onCreated }: { onCreated: () => void }) {
           </Button>
           <Button onClick={() => mut.mutate()} disabled={mut.isPending}>
             יצירת משתמש
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+type EditableProfile = {
+  id: string;
+  full_name: string | null;
+  email: string;
+  phone: string | null;
+  national_id: string | null;
+  birth_date: string | null;
+};
+
+function EditDetailsDialog({
+  profile,
+  onSaved,
+}: {
+  profile: EditableProfile;
+  onSaved: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({
+    full_name: profile.full_name ?? "",
+    phone: profile.phone ?? "",
+    national_id: profile.national_id ?? "",
+    birth_date: profile.birth_date ?? "",
+  });
+
+  const save = useMutation({
+    mutationFn: async () => {
+      const name = form.full_name.trim();
+      if (name.length < 2) throw new Error("יש להזין שם מלא");
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          full_name: name.slice(0, 120),
+          phone: form.phone.trim() ? form.phone.trim().slice(0, 25) : null,
+          national_id: form.national_id.trim() ? form.national_id.trim().slice(0, 20) : null,
+          birth_date: form.birth_date || null,
+        })
+        .eq("id", profile.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("פרטי העובד עודכנו");
+      setOpen(false);
+      onSaved();
+    },
+    onError: (e: unknown) =>
+      toast.error(`עדכון הפרטים נכשל: ${e instanceof Error ? e.message : "שגיאה"}`),
+  });
+
+  const label = profile.full_name || profile.email;
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="mt-1 h-7 px-2"
+          aria-label={`עריכת פרטים מזהים עבור ${label}`}
+        >
+          <Pencil className="size-3.5" />
+          עריכת פרטים
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>עריכת פרטים – {label}</DialogTitle>
+          <DialogDescription>שם מלא, טלפון, תעודת זהות ותאריך לידה.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor={`ed-name-${profile.id}`}>שם מלא</Label>
+            <Input
+              id={`ed-name-${profile.id}`}
+              value={form.full_name}
+              onChange={(e) => setForm({ ...form, full_name: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor={`ed-phone-${profile.id}`}>מספר טלפון</Label>
+            <Input
+              id={`ed-phone-${profile.id}`}
+              type="tel"
+              value={form.phone}
+              onChange={(e) => setForm({ ...form, phone: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor={`ed-nid-${profile.id}`}>תעודת זהות</Label>
+            <Input
+              id={`ed-nid-${profile.id}`}
+              inputMode="numeric"
+              maxLength={20}
+              value={form.national_id}
+              onChange={(e) => setForm({ ...form, national_id: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor={`ed-bdate-${profile.id}`}>תאריך לידה</Label>
+            <Input
+              id={`ed-bdate-${profile.id}`}
+              type="date"
+              value={form.birth_date}
+              onChange={(e) => setForm({ ...form, birth_date: e.target.value })}
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>
+            ביטול
+          </Button>
+          <Button onClick={() => save.mutate()} disabled={save.isPending}>
+            שמירה
           </Button>
         </DialogFooter>
       </DialogContent>
