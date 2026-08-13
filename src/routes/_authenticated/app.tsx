@@ -719,17 +719,14 @@ function TimesheetPage() {
       {/* ===== Mobile: day cards ===== */}
       <section className="space-y-2 md:hidden">
         {days.map((d) => {
-          const e = entryByDate.get(d);
-          const attendance = computeHours(
-            trimTime(e?.clock_in ?? null),
-            trimTime(e?.clock_out ?? null),
-            e?.break_minutes ?? 0,
-          );
+          const segs = segsByDate.get(d) ?? [];
+          const attendance = dayHours(segs);
+          const absence = segs.find((s) => s.absence_type)?.absence_type ?? null;
           const proj = hoursByDate.get(d) ?? 0;
           const holiday = holidayFor(d);
           const isToday = d === todayIso();
           const missing = missingOut.includes(d);
-          const empty = !e && !holiday && proj === 0;
+          const empty = segs.length === 0 && !holiday && proj === 0;
           if (empty && d > todayIso()) return null;
           return (
             <button
@@ -749,11 +746,7 @@ function TimesheetPage() {
                   {isToday && <span className="ms-2 text-xs font-normal text-primary">היום</span>}
                 </span>
                 <span className="text-sm tabular-nums">
-                  {attendance
-                    ? fmtHours(attendance)
-                    : e?.absence_type
-                      ? absenceLabel(e.absence_type)
-                      : "—"}
+                  {attendance ? fmtHours(attendance) : absence ? absenceLabel(absence) : "—"}
                 </span>
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
