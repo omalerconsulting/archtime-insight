@@ -121,13 +121,15 @@ function FinancePage() {
     lateDays: (r) => r.lateDays,
   });
 
-  const totalOutstanding = open.reduce((s, r) => s + r.amount, 0);
-  const invoiced = open.filter((r) => r.milestone.status === "invoiced").reduce((s, r) => s + r.amount, 0);
-  const overdue = open.filter((r) => r.lateDays > 0);
+  const totalOutstanding = openAll.reduce((s, r) => s + r.amount, 0);
+  const invoiced = openAll
+    .filter((r) => r.milestone.status === "invoiced")
+    .reduce((s, r) => s + r.amount, 0);
+  const overdue = openAll.filter((r) => r.lateDays > 0);
   const overdueAmount = overdue.reduce((s, r) => s + r.amount, 0);
 
   const forecastMap = new Map<string, number>();
-  open.forEach((r) => {
+  openAll.forEach((r) => {
     const key = r.milestone.due_date ? r.milestone.due_date.slice(0, 7) : "unknown";
     forecastMap.set(key, (forecastMap.get(key) ?? 0) + r.amount);
   });
