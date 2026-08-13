@@ -806,12 +806,15 @@ function TimesheetPage() {
           </thead>
           <tbody>
             {days.map((d) => {
-              const e = entryByDate.get(d);
-              const attendance = computeHours(
-                trimTime(e?.clock_in ?? null),
-                trimTime(e?.clock_out ?? null),
-                e?.break_minutes ?? 0,
-              );
+              const segs = segsByDate.get(d) ?? [];
+              const attendance = dayHours(segs);
+              const manual = segs.some((s) => s.manually_edited);
+              const absences = segs
+                .map((s) => absenceLabel(s.absence_type))
+                .filter(Boolean)
+                .join(", ");
+              const breakTotal = segs.reduce((s, x) => s + (x.break_minutes ?? 0), 0);
+              const openCount = segs.filter(isOpenSegment).length;
               const proj = hoursByDate.get(d) ?? 0;
               const mismatch = attendance > 0 && hoursGap(attendance, proj) > 0.5;
               const weekend = ["שישי", "שבת"].includes(weekdayOf(d));
@@ -840,27 +843,42 @@ function TimesheetPage() {
                   </td>
                   <td className="p-3">{weekdayOf(d)}</td>
                   <td
-                    className={`p-3 tabular-nums ${e?.manually_edited ? "font-semibold text-destructive" : ""}`}
+                    className={`p-3 tabular-nums ${manual ? "font-semibold text-destructive" : ""}`}
                   >
-                    {trimTime(e?.clock_in ?? null).slice(0, 5) || "—"}
+                    {segs.length === 0
+                      ? "—"
+                      : segs.map((s) => (
+                          <div key={s.id}>{trimTime(s.clock_in).slice(0, 5) || "—"}</div>
+                        ))}
                   </td>
                   <td
-                    className={`p-3 tabular-nums ${e?.manually_edited ? "font-semibold text-destructive" : ""}`}
+                    className={`p-3 tabular-nums ${manual ? "font-semibold text-destructive" : ""}`}
                   >
-                    {trimTime(e?.clock_out ?? null).slice(0, 5) ||
-                      (missing ? (
-                        <span className="font-semibold text-destructive">חסרה</span>
-                      ) : (
-                        "—"
-                      ))}
+                    {segs.length === 0
+                      ? "—"
+                      : segs.map((s) => (
+                          <div key={s.id}>
+                            {trimTime(s.clock_out).slice(0, 5) ||
+                              (missing ? (
+                                <span className="font-semibold text-destructive">חסרה</span>
+                              ) : (
+                                <span className="text-muted-foreground">פתוח</span>
+                              ))}
+                          </div>
+                        ))}
                   </td>
                   <td
-                    className={`p-3 tabular-nums ${e?.manually_edited ? "font-semibold text-destructive" : ""}`}
+                    className={`p-3 tabular-nums ${manual ? "font-semibold text-destructive" : ""}`}
                   >
-                    {e?.break_minutes ?? 0}
+                    {breakTotal}
                   </td>
                   <td className="p-3 font-medium tabular-nums">
                     {attendance ? fmtHours(attendance) : "—"}
+                    {segs.length > 1 && (
+                      <span className="ms-1 text-xs text-muted-foreground">
+                        ({segs.length} מקטעים)
+                      </span>
+                    )}
                   </td>
                   <td className={`p-3 tabular-nums ${mismatch ? "text-destructive" : ""}`}>
                     {proj ? hoursToDuration(proj) : "—"}
@@ -871,7 +889,7 @@ function TimesheetPage() {
                       />
                     )}
                   </td>
-                  <td className="p-3">{absenceLabel(e?.absence_type) || "—"}</td>
+                  <td className="p-3">{absences || "—"}</td>
                   <td className="p-3">
                     {holiday ? (
                       <span className={holiday.restDay ? "font-medium" : "text-muted-foreground"}>
@@ -886,7 +904,12 @@ function TimesheetPage() {
                     <Button size="sm" variant="ghost" onClick={() => setEditDate(d)}>
                       {monthLocked ? "צפייה" : "עריכה"}
                     </Button>
-                    {e?.manually_edited && (
+                    {openCount > 0 && d < todayIso() && (
+                      <span className="ms-1 text-xs font-semibold text-destructive">
+                        מקטע לא נסגר
+                      </span>
+                    )}
+                    {manual && (
                       <span className="ms-1 text-xs text-destructive">עודכן ידנית</span>
                     )}
                   </td>
