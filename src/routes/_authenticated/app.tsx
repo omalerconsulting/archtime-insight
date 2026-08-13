@@ -406,10 +406,9 @@ function TimesheetPage() {
     ? projectsQ.data?.find((p) => p.id === activeTimer.project_id)
     : null;
 
-  const workedSince =
-    todayEntry?.clock_in && !todayEntry?.clock_out
-      ? elapsedLabel(`${todayIso()}T${trimTime(todayEntry.clock_in)}`)
-      : null;
+  const workedSince = openSeg?.clock_in
+    ? elapsedLabel(`${todayIso()}T${trimTime(openSeg.clock_in)}`)
+    : null;
 
   const todayRowRef = useRef<HTMLTableRowElement>(null);
   useEffect(() => {
@@ -526,12 +525,31 @@ function TimesheetPage() {
 
         <div className="rounded-xl border border-border bg-card p-5 md:col-span-2">
           <h2 className="mb-1 text-sm font-medium text-muted-foreground">שעון נוכחות – היום</h2>
-          <p className="mb-1 text-lg font-semibold">
-            {todayEntry?.clock_in
-              ? `כניסה ${trimTime(todayEntry.clock_in).slice(0, 5)}`
-              : "טרם נרשמה כניסה"}
-            {todayEntry?.clock_out ? ` · יציאה ${trimTime(todayEntry.clock_out).slice(0, 5)}` : ""}
-          </p>
+          {todaySegs.length === 0 ? (
+            <p className="mb-1 text-lg font-semibold">טרם נרשמה כניסה</p>
+          ) : (
+            <ul className="mb-2 space-y-1">
+              {todaySegs.map((s, i) => (
+                <li key={s.id} className="text-sm">
+                  <span className="font-semibold">מקטע {i + 1}:</span>{" "}
+                  <span className="tabular-nums">
+                    {trimTime(s.clock_in).slice(0, 5) || "—"} –{" "}
+                    {trimTime(s.clock_out).slice(0, 5) || "פתוח"}
+                  </span>
+                  {s.absence_type && (
+                    <span className="ms-2 text-muted-foreground">{absenceLabel(s.absence_type)}</span>
+                  )}
+                  <span className="ms-2 tabular-nums text-muted-foreground">
+                    {segmentHours(s) ? `${hoursToDuration(segmentHours(s))} ש'` : ""}
+                  </span>
+                </li>
+              ))}
+              <li className="text-sm font-semibold">
+                סה״כ היום:{" "}
+                <span className="tabular-nums">{hoursToDuration(dayHours(todaySegs))}</span>
+              </li>
+            </ul>
+          )}
           {workedSince && (
             <p className="mb-3 text-sm text-muted-foreground" dir="rtl">
               בעבודה כבר <span className="font-semibold tabular-nums">{workedSince}</span> שעות
@@ -542,7 +560,7 @@ function TimesheetPage() {
               size="lg"
               className="min-w-28"
               onClick={() => clockMutation.mutate("in")}
-              disabled={clockMutation.isPending}
+              disabled={clockMutation.isPending || Boolean(openSeg)}
             >
               <LogIn className="size-4" />
               כניסה
@@ -552,7 +570,7 @@ function TimesheetPage() {
               variant="outline"
               className="min-w-28"
               onClick={() => clockMutation.mutate("out")}
-              disabled={clockMutation.isPending}
+              disabled={clockMutation.isPending || !openSeg}
             >
               <LogOut className="size-4" />
               יציאה
@@ -560,7 +578,7 @@ function TimesheetPage() {
             <Button
               variant="outline"
               onClick={() => clockMutation.mutate("break-start")}
-              disabled={clockMutation.isPending || onBreak}
+              disabled={clockMutation.isPending || onBreak || !openSeg}
             >
               <Coffee className="size-4" />
               יציאה להפסקה
@@ -576,8 +594,10 @@ function TimesheetPage() {
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
             {onBreak
-              ? `בהפסקה מאז ${trimTime(todayEntry?.break_start ?? null).slice(0, 5)} · סה"כ הפסקות היום: ${todayEntry?.break_minutes ?? 0} דק'`
-              : `סה"כ הפסקות היום: ${todayEntry?.break_minutes ?? 0} דק'`}
+              ? `בהפסקה מאז ${trimTime(openSeg?.break_start ?? null).slice(0, 5)} · סה"כ הפסקות היום: ${todayBreakMinutes} דק'`
+              : openSeg
+                ? `סה"כ הפסקות היום: ${todayBreakMinutes} דק'`
+                : `סה"כ הפסקות היום: ${todayBreakMinutes} דק' · אין מקטע פתוח – לחיצה על "כניסה" תפתח מקטע חדש`}
           </p>
 
           <div className="mt-5 border-t border-border pt-4">
