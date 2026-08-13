@@ -433,6 +433,7 @@ function TimesheetPage() {
 
   return (
     <div className="space-y-6">
+      <PendingProjectsNotice />
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
