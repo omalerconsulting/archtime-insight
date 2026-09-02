@@ -62,6 +62,17 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
   ),
 });
 
+/** Returns the first 2–3 words of a project name so chart ticks stay readable. */
+function projectNameSnippet(name: string) {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "";
+  let take = 2;
+  const firstTwo = words.slice(0, take).join(" ");
+  if (firstTwo.length < 10 && words.length > 2) take = 3;
+  const snippet = words.slice(0, take).join(" ");
+  return snippet.length > 22 ? snippet.slice(0, 20) + "…" : snippet;
+}
+
 function DashboardPage() {
   const now = new Date();
   const [scope, setScope] = useState("all");
@@ -257,12 +268,17 @@ function DashboardPage() {
   const profit = totals.fee - totals.cost;
   const topHours = rows.slice(0, 8).map((r) => ({
     name: `${r.project.code}`,
+    snippet: projectNameSnippet(r.project.name),
     hours: Math.round(r.totalHours * 10) / 10,
   }));
   const profitRows = [...rows]
     .sort((a, b) => b.profit - a.profit)
     .slice(0, 8)
-    .map((r) => ({ name: r.project.code, profit: Math.round(r.profit) }));
+    .map((r) => ({
+      name: r.project.code,
+      snippet: projectNameSnippet(r.project.name),
+      profit: Math.round(r.profit),
+    }));
   const collectionData = [
     {
       name: "נגבה",
@@ -465,7 +481,7 @@ function DashboardPage() {
           <ChartCard title="שעות מושקעות לפי פרויקט (Top 8)">
             <BarChart data={topHours}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+              <XAxis dataKey="name" tick={ProjectTick} height={50} />
               <YAxis tick={{ fontSize: 11 }} width={50} />
               <Tooltip formatter={(v: number) => `${v} שעות`} />
               <Bar dataKey="hours" name="שעות" fill="var(--chart-1)" radius={[6, 6, 0, 0]} />
@@ -474,7 +490,7 @@ function DashboardPage() {
           <ChartCard title="רווח גולמי לפי פרויקט">
             <BarChart data={profitRows}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+              <XAxis dataKey="name" tick={ProjectTick} height={50} />
               <YAxis tick={{ fontSize: 11 }} width={70} />
               <Tooltip formatter={(v: number) => fmtMoney(Number(v))} />
               <Bar dataKey="profit" name="רווח" radius={[6, 6, 0, 0]}>
@@ -727,6 +743,19 @@ function DashboardPage() {
         </section>
       </div>
     </div>
+  );
+}
+
+function ProjectTick({ x, y, payload }: { x: number; y: number; payload: any }) {
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text x={0} y={0} dy={10} textAnchor="middle" className="fill-foreground text-[11px] font-semibold">
+        {payload.value}
+      </text>
+      <text x={0} y={0} dy={24} textAnchor="middle" className="fill-muted-foreground text-[10px]">
+        {payload.payload.snippet}
+      </text>
+    </g>
   );
 }
 
