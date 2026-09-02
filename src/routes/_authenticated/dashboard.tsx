@@ -481,7 +481,7 @@ function DashboardPage() {
           <ChartCard title="שעות מושקעות לפי פרויקט (Top 8)">
             <BarChart data={topHours}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-              <XAxis dataKey="name" tick={<ProjectTick />} height={50} />
+              <XAxis dataKey="name" tick={ProjectTick} height={50} />
               <YAxis tick={{ fontSize: 11 }} width={50} />
               <Tooltip formatter={(v: number) => `${v} שעות`} />
               <Bar dataKey="hours" name="שעות" fill="var(--chart-1)" radius={[6, 6, 0, 0]} />
