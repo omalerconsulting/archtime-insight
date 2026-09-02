@@ -24,6 +24,7 @@ import { MonthEndNotice } from "@/components/MonthEndNotice";
 import { ForcePasswordChange } from "@/components/ForcePasswordChange";
 import { PendingApproval } from "@/components/PendingApproval";
 import { MyDetailsDialog } from "@/components/MyDetailsDialog";
+import { AppFooter } from "@/components/AppFooter";
 import officeLogo from "@/assets/office-logo.png";
 
 type NavItem = { to: string; label: string; icon: typeof Building2; adminOnly?: boolean };
@@ -166,10 +167,12 @@ export function AppShell({ children }: { children: ReactNode }) {
         )}
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-6">
+      <main className="mx-auto max-w-7xl flex-1 px-4 py-6">
         <MonthEndNotice />
         {children}
       </main>
+
+      <AppFooter />
     </div>
   );
 }
