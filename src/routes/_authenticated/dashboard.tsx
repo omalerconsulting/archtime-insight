@@ -62,6 +62,17 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
   ),
 });
 
+/** Returns the first 2–3 words of a project name so chart ticks stay readable. */
+function projectNameSnippet(name: string) {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "";
+  let take = 2;
+  const firstTwo = words.slice(0, take).join(" ");
+  if (firstTwo.length < 10 && words.length > 2) take = 3;
+  const snippet = words.slice(0, take).join(" ");
+  return snippet.length > 22 ? snippet.slice(0, 20) + "…" : snippet;
+}
+
 function DashboardPage() {
   const now = new Date();
   const [scope, setScope] = useState("all");
