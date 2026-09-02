@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { Clock, FileText, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
+import { AppFooter } from "@/components/AppFooter";
 import officeLogo from "@/assets/simeone-logo.png.asset.json";
 
 export const Route = createFileRoute("/")({
@@ -132,9 +133,7 @@ function Index() {
           </section>
         </main>
 
-        <footer className="border-t border-border/60 py-8 text-center text-sm text-muted-foreground">
-          מערכת ניהול שעות ופרויקטים · דיווח שעות בהתאם לחוק שעות עבודה ומנוחה
-        </footer>
+        <AppFooter />
       </div>
     </div>
   );
