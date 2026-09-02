@@ -746,6 +746,19 @@ function DashboardPage() {
   );
 }
 
+function ProjectTick({ x, y, payload }: { x: number; y: number; payload: any }) {
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text x={0} y={0} dy={10} textAnchor="middle" className="fill-foreground text-[11px] font-semibold">
+        {payload.value}
+      </text>
+      <text x={0} y={0} dy={24} textAnchor="middle" className="fill-muted-foreground text-[10px]">
+        {payload.payload.snippet}
+      </text>
+    </g>
+  );
+}
+
 function Kpi({
   label,
   value,
