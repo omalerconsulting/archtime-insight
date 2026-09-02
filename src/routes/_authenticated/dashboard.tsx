@@ -481,7 +481,7 @@ function DashboardPage() {
           <ChartCard title="שעות מושקעות לפי פרויקט (Top 8)">
             <BarChart data={topHours}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-              <XAxis dataKey="name" tick={ProjectTick} height={50} />
+              <XAxis dataKey="name" tick={makeProjectTick(topHours)} height={50} />
               <YAxis tick={{ fontSize: 11 }} width={50} />
               <Tooltip formatter={(v: number) => `${v} שעות`} />
               <Bar dataKey="hours" name="שעות" fill="var(--chart-1)" radius={[6, 6, 0, 0]} />
@@ -490,7 +490,7 @@ function DashboardPage() {
           <ChartCard title="רווח גולמי לפי פרויקט">
             <BarChart data={profitRows}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-              <XAxis dataKey="name" tick={ProjectTick} height={50} />
+              <XAxis dataKey="name" tick={makeProjectTick(profitRows)} height={50} />
               <YAxis tick={{ fontSize: 11 }} width={70} />
               <Tooltip formatter={(v: number) => fmtMoney(Number(v))} />
               <Bar dataKey="profit" name="רווח" radius={[6, 6, 0, 0]}>
@@ -746,17 +746,25 @@ function DashboardPage() {
   );
 }
 
-function ProjectTick({ x, y, payload }: { x: number; y: number; payload: any }) {
-  return (
-    <g transform={`translate(${x},${y})`}>
-      <text x={0} y={0} dy={10} textAnchor="middle" className="fill-foreground text-[11px] font-semibold">
-        {payload.value}
-      </text>
-      <text x={0} y={0} dy={24} textAnchor="middle" className="fill-muted-foreground text-[10px]">
-        {payload.payload.snippet}
-      </text>
-    </g>
-  );
+function makeProjectTick(rows: Array<{ name: string; snippet?: string }>) {
+  return function ProjectTick(props: any) {
+    const { x, y, payload } = props ?? {};
+    const label = payload?.value ?? "";
+    const snippet =
+      rows.find((r) => r.name === label)?.snippet ?? "";
+    return (
+      <g transform={`translate(${x ?? 0},${y ?? 0})`}>
+        <text x={0} y={0} dy={10} textAnchor="middle" className="fill-foreground text-[11px] font-semibold">
+          {label}
+        </text>
+        {snippet && (
+          <text x={0} y={0} dy={24} textAnchor="middle" className="fill-muted-foreground text-[10px]">
+            {snippet}
+          </text>
+        )}
+      </g>
+    );
+  };
 }
 
 function Kpi({
