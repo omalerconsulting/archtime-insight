@@ -490,7 +490,7 @@ function DashboardPage() {
           <ChartCard title="רווח גולמי לפי פרויקט">
             <BarChart data={profitRows}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-              <XAxis dataKey="name" tick={ProjectTick} height={50} />
+              <XAxis dataKey="name" tick={makeProjectTick(profitRows)} height={50} />
               <YAxis tick={{ fontSize: 11 }} width={70} />
               <Tooltip formatter={(v: number) => fmtMoney(Number(v))} />
               <Bar dataKey="profit" name="רווח" radius={[6, 6, 0, 0]}>
