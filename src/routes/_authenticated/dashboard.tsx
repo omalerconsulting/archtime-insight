@@ -257,12 +257,17 @@ function DashboardPage() {
   const profit = totals.fee - totals.cost;
   const topHours = rows.slice(0, 8).map((r) => ({
     name: `${r.project.code}`,
+    snippet: projectNameSnippet(r.project.name),
     hours: Math.round(r.totalHours * 10) / 10,
   }));
   const profitRows = [...rows]
     .sort((a, b) => b.profit - a.profit)
     .slice(0, 8)
-    .map((r) => ({ name: r.project.code, profit: Math.round(r.profit) }));
+    .map((r) => ({
+      name: r.project.code,
+      snippet: projectNameSnippet(r.project.name),
+      profit: Math.round(r.profit),
+    }));
   const collectionData = [
     {
       name: "נגבה",
