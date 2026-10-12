@@ -8,6 +8,13 @@
       "when": 1791837324448,
       "tag": "0000_project_commissions",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791837562433,
+      "tag": "0001_commission_payments",
+      "breakpoints": true
     }
   ]
 }

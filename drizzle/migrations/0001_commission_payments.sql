@@ -1,0 +1,1 @@
+ALTER TABLE public.project_commissions ADD COLUMN paid_amount numeric NOT NULL DEFAULT 0, ADD COLUMN paid_date date;

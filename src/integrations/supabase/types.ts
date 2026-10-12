@@ -339,6 +339,8 @@ export type Database = {
           created_at: string
           expected_date: string | null
           id: string
+          paid_amount: number
+          paid_date: string | null
           project_id: string
           sort_order: number
           supplier_name: string
@@ -349,6 +351,8 @@ export type Database = {
           created_at?: string
           expected_date?: string | null
           id?: string
+          paid_amount?: number
+          paid_date?: string | null
           project_id: string
           sort_order?: number
           supplier_name?: string
@@ -359,6 +363,8 @@ export type Database = {
           created_at?: string
           expected_date?: string | null
           id?: string
+          paid_amount?: number
+          paid_date?: string | null
           project_id?: string
           sort_order?: number
           supplier_name?: string
