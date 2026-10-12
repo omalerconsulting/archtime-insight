@@ -96,15 +96,16 @@ function PnlPage() {
   const q = useQuery({
     queryKey: ["pnl"],
     queryFn: async () => {
-      const [projects, milestones, expenses, incomes, incomeMs, adj] = await Promise.all([
+      const [projects, milestones, expenses, incomes, incomeMs, adj, comms] = await Promise.all([
         supabase.from("projects").select("id, code, name, fee_total, status"),
         supabase.from("project_milestones").select("*"),
         supabase.from("expenses").select("*").order("expense_date", { ascending: false }),
         supabase.from("other_incomes").select("*").order("created_at", { ascending: false }),
         supabase.from("other_income_milestones").select("*").order("sort_order"),
         supabase.from("pnl_adjustments").select("*"),
+        supabase.from("project_commissions").select("project_id, amount, expected_date"),
       ]);
-      for (const r of [projects, milestones, expenses, incomes, incomeMs, adj]) {
+      for (const r of [projects, milestones, expenses, incomes, incomeMs, adj, comms]) {
         if (r.error) throw r.error;
       }
       return {
@@ -114,6 +115,7 @@ function PnlPage() {
         incomes: (incomes.data ?? []) as OtherIncome[],
         incomeMs: (incomeMs.data ?? []) as OtherMilestone[],
         adjustments: adj.data ?? [],
+        commissions: comms.data ?? [],
       };
     },
   });
@@ -163,6 +165,15 @@ function PnlPage() {
         const row = byKey.get(monthKey(m.due_date));
         if (row) row.projectForecast += remaining;
       }
+    });
+
+    // Supplier commissions on projects count as project income in their expected month.
+    d.commissions.forEach((c) => {
+      if (!c.expected_date) return;
+      const row = byKey.get(monthKey(c.expected_date));
+      if (!row) return;
+      if (c.expected_date <= todayIso()) row.projectActual += Number(c.amount) || 0;
+      else row.projectForecast += Number(c.amount) || 0;
     });
 
     d.incomeMs.forEach((m) => {
