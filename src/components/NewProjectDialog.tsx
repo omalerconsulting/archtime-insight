@@ -56,7 +56,12 @@ export function NewProjectDialog({ triggerLabel = "פרויקט חדש" }: { tri
           {triggerLabel}
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent
+        className="sm:max-w-md"
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+        onPointerDownOutside={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>פרויקט חדש</DialogTitle>
           <DialogDescription>
