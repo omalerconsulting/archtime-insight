@@ -232,7 +232,7 @@ function DashboardPage() {
       pending: d.pendingReports,
       totals: {
         hours: rows.reduce((s, r) => s + r.totalHours, 0),
-        fee: rows.reduce((s, r) => s + Number(r.project.fee_total), 0),
+        fee: rows.reduce((s, r) => s + r.income, 0),
         cost: rows.reduce((s, r) => s + r.cost, 0),
         outstanding: rows.reduce((s, r) => s + r.outstanding, 0),
         late: rows.filter((r) => r.lateDays > 0).length,
@@ -260,7 +260,7 @@ function DashboardPage() {
     client: (r) => r.project.client_name ?? "",
     hours: (r) => r.totalHours,
     cost: (r) => r.cost,
-    fee: (r) => Number(r.project.fee_total),
+    fee: (r) => r.income,
     profit: (r) => r.profit,
     margin: (r) => r.margin,
     budgetPct: (r) => r.budgetPct ?? -1,
@@ -633,7 +633,7 @@ function DashboardPage() {
                     )}
                   </td>
                   <td className="p-3 tabular-nums">{fmtMoney(r.cost)}</td>
-                  <td className="p-3 tabular-nums">{fmtMoney(Number(r.project.fee_total))}</td>
+                  <td className="p-3 tabular-nums">{fmtMoney(r.income)}</td>
                   <td
                     className={`p-3 font-medium tabular-nums ${r.profit < 0 ? "text-destructive" : ""}`}
                   >
