@@ -112,7 +112,7 @@ function DashboardPage() {
             .from("monthly_reports")
             .select("id, user_id, month, status")
             .eq("status", "submitted"),
-          supabase.from("project_commissions").select("project_id, amount"),
+          supabase.from("project_commissions").select("project_id, amount, paid_amount"),
         ]);
       const err =
         projects.error ||
@@ -168,6 +168,9 @@ function DashboardPage() {
           .filter((c) => c.project_id === p.id)
           .reduce((s, c) => s + Number(c.amount || 0), 0);
         const income = Number(p.fee_total) + commissionTotal;
+        const commissionCollected = d.commissions
+          .filter((c) => c.project_id === p.id)
+          .reduce((s, c) => s + Math.min(Number(c.paid_amount) || 0, Number(c.amount) || 0), 0);
         const profit = income - cost;
         // Projected profit at the current burn rate: extrapolate cost to the full hours budget.
         const projectedProfit =
@@ -178,8 +181,8 @@ function DashboardPage() {
           project: p,
           totalHours,
           cost,
-          collected,
-          outstanding: Number(p.fee_total) - collected,
+          collected: collected + commissionCollected,
+          outstanding: income - collected - commissionCollected,
           profit,
           projectedProfit,
           budget,

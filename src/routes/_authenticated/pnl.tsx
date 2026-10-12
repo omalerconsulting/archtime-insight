@@ -103,7 +103,7 @@ function PnlPage() {
         supabase.from("other_incomes").select("*").order("created_at", { ascending: false }),
         supabase.from("other_income_milestones").select("*").order("sort_order"),
         supabase.from("pnl_adjustments").select("*"),
-        supabase.from("project_commissions").select("project_id, amount, expected_date"),
+        supabase.from("project_commissions").select("project_id, amount, expected_date, paid_amount, paid_date"),
       ]);
       for (const r of [projects, milestones, expenses, incomes, incomeMs, adj, comms]) {
         if (r.error) throw r.error;
@@ -168,12 +168,19 @@ function PnlPage() {
     });
 
     // Supplier commissions on projects count as project income in their expected month.
+    // Collected part counts as actual in the collection month; the rest is forecast.
     d.commissions.forEach((c) => {
-      if (!c.expected_date) return;
-      const row = byKey.get(monthKey(c.expected_date));
-      if (!row) return;
-      if (c.expected_date <= todayIso()) row.projectActual += Number(c.amount) || 0;
-      else row.projectForecast += Number(c.amount) || 0;
+      const amount = Number(c.amount) || 0;
+      const collected = Math.min(Number(c.paid_amount) || 0, amount);
+      const remaining = Math.max(0, amount - collected);
+      if (collected > 0) {
+        const row = byKey.get(monthKey(c.paid_date || c.expected_date || ""));
+        if (row) row.projectActual += collected;
+      }
+      if (remaining > 0 && c.expected_date) {
+        const row = byKey.get(monthKey(c.expected_date));
+        if (row) row.projectForecast += remaining;
+      }
     });
 
     d.incomeMs.forEach((m) => {
