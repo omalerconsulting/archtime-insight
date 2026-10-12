@@ -141,6 +141,15 @@ function ProjectsPage() {
         (p.client_name ?? "").toLowerCase().includes(q)),
   );
   const allCommissions = projectsQ.data?.commissions ?? [];
+  const staffNamesQ = useQuery({
+    queryKey: ["staff-names"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("profiles").select("id, full_name, email");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const staffNames = new Map((staffNamesQ.data ?? []).map((u) => [u.id, u.full_name || u.email]));
   const commOf = (id: string) => {
     const cs = allCommissions.filter((c) => c.project_id === id);
     return {
@@ -366,6 +375,7 @@ function ProjectsPage() {
                     )}
                   </td>
                   <td className="p-3">{p.client_name || "—"}</td>
+                  <td className="p-3">{(p.manager_id && staffNames.get(p.manager_id)) || "—"}</td>
                   <td className="p-3">{fmtMoney(income)}</td>
                   <td className="p-3">{fmtMoney(paid)}</td>
                   <td className="p-3 font-medium">{fmtMoney(income - paid)}</td>
@@ -474,6 +484,7 @@ type ProjectRow = {
   start_date: string | null;
   status: string;
   notes: string | null;
+  manager_id?: string | null;
 };
 
 function ProjectDialog({
@@ -497,6 +508,18 @@ function ProjectDialog({
     start_date: project?.start_date ?? "",
     status: project?.status ?? "active",
     notes: project?.notes ?? "",
+    manager_id: project?.manager_id ?? "",
+  });
+  const staffQ = useQuery({
+    queryKey: ["staff-list"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, full_name, email, is_deleted, is_approved")
+        .order("full_name");
+      if (error) throw error;
+      return (data ?? []).filter((p) => !p.is_deleted);
+    },
   });
   const [stations, setStations] = useState<MilestoneDraft[]>([]);
   const [commissions, setCommissions] = useState<
@@ -559,6 +582,7 @@ function ProjectDialog({
         start_date: form.start_date || null,
         status: form.status,
         notes: form.notes || null,
+        manager_id: form.manager_id || null,
         needs_admin_review: false,
       };
       if (!payload.code || !payload.name) throw new Error("missing");
@@ -721,6 +745,24 @@ function ProjectDialog({
               value={form.start_date}
               onChange={(e) => setForm({ ...form, start_date: e.target.value })}
             />
+          </Field>
+          <Field label="מנהל פרויקט" id="pm">
+            <Select
+              value={form.manager_id || "none"}
+              onValueChange={(v) => setForm({ ...form, manager_id: v === "none" ? "" : v })}
+            >
+              <SelectTrigger id="pm">
+                <SelectValue placeholder="בחירת מנהל פרויקט" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">ללא</SelectItem>
+                {(staffQ.data ?? []).map((u) => (
+                  <SelectItem key={u.id} value={u.id}>
+                    {u.full_name || u.email}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </Field>
           <Field label="סטטוס" id="st">
             <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
