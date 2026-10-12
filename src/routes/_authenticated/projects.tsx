@@ -306,6 +306,9 @@ function ProjectsPage() {
                 לקוח
               </th>
               <th scope="col" className="p-3 text-start">
+                מנהל פרויקט
+              </th>
+              <th scope="col" className="p-3 text-start">
                 שכר טרחה
               </th>
               <th scope="col" className="p-3 text-start">
@@ -422,7 +425,7 @@ function ProjectsPage() {
             })}
             {projects.length === 0 && (
               <tr>
-                <td colSpan={10} className="p-6 text-center text-muted-foreground">
+                <td colSpan={11} className="p-6 text-center text-muted-foreground">
                   {allProjects.length
                     ? "לא נמצאו פרויקטים התואמים לסינון."
                     : "עדיין לא הוגדרו פרויקטים. התחל בהוספת פרויקט חדש."}
