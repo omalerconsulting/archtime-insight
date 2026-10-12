@@ -3,8 +3,9 @@ import { ShieldAlert } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 
 export function AdminOnly({ children }: { children: ReactNode }) {
-  const { isAdmin, loading } = useAuth();
-  if (loading) return <p className="p-6 text-muted-foreground">טוען…</p>;
+  const { isAdmin, loading, profile } = useAuth();
+  // Only block on the very first load; background refreshes must keep the page mounted.
+  if (loading && !profile) return <p className="p-6 text-muted-foreground">טוען…</p>;
   if (!isAdmin) {
     return (
       <div className="mx-auto max-w-md rounded-xl border border-border bg-card p-8 text-center">

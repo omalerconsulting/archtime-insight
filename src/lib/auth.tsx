@@ -58,16 +58,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let mounted = true;
+    let currentUserId: string | undefined;
     supabase.auth.getSession().then(({ data }) => {
       if (!mounted) return;
       setSession(data.session);
-      void load(data.session?.user.id);
+      currentUserId = data.session?.user.id;
+      void load(currentUserId);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
       setSession(next);
+      const nextId = next?.user.id;
+      // Supabase re-emits SIGNED_IN when the tab regains focus. Only show a
+      // loading state when the actual user changed, otherwise refresh silently
+      // so open dialogs/forms are not unmounted.
       if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") {
-        setLoading(true);
-        void load(next?.user.id);
+        if (nextId !== currentUserId) {
+          setLoading(true);
+        }
+        currentUserId = nextId;
+        void load(nextId);
       }
     });
     return () => {
