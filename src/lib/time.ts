@@ -15,6 +15,7 @@ export function absenceLabel(value: string | null | undefined) {
 }
 
 export const PROJECT_STATUSES = [
+  { value: "quote", label: "הצעת מחיר" },
   { value: "active", label: "פעיל" },
   { value: "closed", label: "פרויקט הסתיים" },
 ] as const;
