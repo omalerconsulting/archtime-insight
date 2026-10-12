@@ -98,8 +98,8 @@ function DashboardPage() {
         hoursQ = hoursQ.gte("work_date", range.start).lte("work_date", range.end);
         entriesQ = entriesQ.gte("work_date", range.start).lte("work_date", range.end);
       }
-      const [projects, milestones, hours, profiles, entries, settings, pending] = await Promise.all(
-        [
+      const [projects, milestones, hours, profiles, entries, settings, pending, commissions] =
+        await Promise.all([
           supabase.from("projects").select("*"),
           supabase.from("project_milestones").select("*"),
           hoursQ,
@@ -112,15 +112,16 @@ function DashboardPage() {
             .from("monthly_reports")
             .select("id, user_id, month, status")
             .eq("status", "submitted"),
-        ],
-      );
+          supabase.from("project_commissions").select("project_id, amount"),
+        ]);
       const err =
         projects.error ||
         milestones.error ||
         hours.error ||
         profiles.error ||
         entries.error ||
-        pending.error;
+        pending.error ||
+        commissions.error;
       if (err) throw err;
       return {
         projects: projects.data ?? [],
@@ -130,6 +131,7 @@ function DashboardPage() {
         entries: entries.data ?? [],
         standard: Number(settings.data?.standard_daily_hours ?? 8.6),
         pendingReports: pending.data ?? [],
+        commissions: commissions.data ?? [],
       };
     },
   });
@@ -161,11 +163,16 @@ function DashboardPage() {
             : 0;
         const budget = Number(p.hours_budget) || 0;
         const budgetPct = budget > 0 ? (totalHours / budget) * 100 : null;
-        const profit = Number(p.fee_total) - cost;
+        // Project income = office fee + supplier commissions attached to the project.
+        const commissionTotal = d.commissions
+          .filter((c) => c.project_id === p.id)
+          .reduce((s, c) => s + Number(c.amount || 0), 0);
+        const income = Number(p.fee_total) + commissionTotal;
+        const profit = income - cost;
         // Projected profit at the current burn rate: extrapolate cost to the full hours budget.
         const projectedProfit =
           budget > 0 && totalHours > 0
-            ? Number(p.fee_total) - (cost / totalHours) * Math.max(budget, totalHours)
+            ? income - (cost / totalHours) * Math.max(budget, totalHours)
             : null;
         return {
           project: p,
@@ -177,8 +184,10 @@ function DashboardPage() {
           projectedProfit,
           budget,
           budgetPct,
-          margin: Number(p.fee_total) > 0 ? (profit / Number(p.fee_total)) * 100 : 0,
-          effectiveRate: totalHours > 0 ? Number(p.fee_total) / totalHours : 0,
+          income,
+          commissionTotal,
+          margin: income > 0 ? (profit / income) * 100 : 0,
+          effectiveRate: totalHours > 0 ? income / totalHours : 0,
           stage: openMs?.title ?? "הושלם",
           lateDays,
         };
@@ -223,7 +232,7 @@ function DashboardPage() {
       pending: d.pendingReports,
       totals: {
         hours: rows.reduce((s, r) => s + r.totalHours, 0),
-        fee: rows.reduce((s, r) => s + Number(r.project.fee_total), 0),
+        fee: rows.reduce((s, r) => s + r.income, 0),
         cost: rows.reduce((s, r) => s + r.cost, 0),
         outstanding: rows.reduce((s, r) => s + r.outstanding, 0),
         late: rows.filter((r) => r.lateDays > 0).length,
@@ -251,7 +260,7 @@ function DashboardPage() {
     client: (r) => r.project.client_name ?? "",
     hours: (r) => r.totalHours,
     cost: (r) => r.cost,
-    fee: (r) => Number(r.project.fee_total),
+    fee: (r) => r.income,
     profit: (r) => r.profit,
     margin: (r) => r.margin,
     budgetPct: (r) => r.budgetPct ?? -1,
@@ -624,7 +633,7 @@ function DashboardPage() {
                     )}
                   </td>
                   <td className="p-3 tabular-nums">{fmtMoney(r.cost)}</td>
-                  <td className="p-3 tabular-nums">{fmtMoney(Number(r.project.fee_total))}</td>
+                  <td className="p-3 tabular-nums">{fmtMoney(r.income)}</td>
                   <td
                     className={`p-3 font-medium tabular-nums ${r.profit < 0 ? "text-destructive" : ""}`}
                   >
