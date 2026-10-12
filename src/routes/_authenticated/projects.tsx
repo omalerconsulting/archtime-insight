@@ -808,6 +808,35 @@ function ProjectDialog({
                 <Plus className="size-4" />
                 הוספת תחנה
               </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                title="מוסיף תשלום עם אותו סכום ותאריך חודש אחרי התשלום הקודם"
+                onClick={() => {
+                  const prev = stations[stations.length - 1];
+                  let nextDate = "";
+                  if (prev?.due_date) {
+                    const [y, m, d] = prev.due_date.split("-").map(Number);
+                    const ny = m === 12 ? y + 1 : y;
+                    const nm = m === 12 ? 1 : m + 1;
+                    const last = new Date(Date.UTC(ny, nm, 0)).getUTCDate();
+                    nextDate = `${ny}-${String(nm).padStart(2, "0")}-${String(Math.min(d, last)).padStart(2, "0")}`;
+                  }
+                  const count = stations.filter((s) => /^תשלום \d+$/.test(s.title)).length;
+                  setStations([
+                    ...stations,
+                    {
+                      title: `תשלום ${count + 1}`,
+                      amount_type: prev?.amount_type ?? "amount",
+                      amount_value: prev?.amount_value ?? "",
+                      due_date: nextDate,
+                    },
+                  ]);
+                }}
+              >
+                <Plus className="size-4" />
+                הוספת תשלום
+              </Button>
             </div>
             {stations.length === 0 && (
               <p className="text-xs text-muted-foreground">
