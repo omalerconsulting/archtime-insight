@@ -483,6 +483,7 @@ export type Database = {
           fee_total: number
           hours_budget: number | null
           id: string
+          manager_id: string | null
           name: string
           needs_admin_review: boolean
           notes: string | null
@@ -498,6 +499,7 @@ export type Database = {
           fee_total?: number
           hours_budget?: number | null
           id?: string
+          manager_id?: string | null
           name: string
           needs_admin_review?: boolean
           notes?: string | null
@@ -513,6 +515,7 @@ export type Database = {
           fee_total?: number
           hours_budget?: number | null
           id?: string
+          manager_id?: string | null
           name?: string
           needs_admin_review?: boolean
           notes?: string | null
