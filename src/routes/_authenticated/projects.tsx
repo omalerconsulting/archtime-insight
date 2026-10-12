@@ -76,6 +76,15 @@ type Milestone = {
   sort_order: number;
 };
 
+type Commission = {
+  id: string;
+  project_id: string;
+  supplier_name: string;
+  amount: number;
+  expected_date: string | null;
+  sort_order: number;
+};
+
 function ProjectsPage() {
   const qc = useQueryClient();
   const [checked, setChecked] = useState<string[]>([]);
@@ -88,13 +97,19 @@ function ProjectsPage() {
   const projectsQ = useQuery({
     queryKey: ["projects-full"],
     queryFn: async () => {
-      const [projects, milestones] = await Promise.all([
+      const [projects, milestones, commissions] = await Promise.all([
         supabase.from("projects").select("*").order("code"),
         supabase.from("project_milestones").select("*").order("sort_order"),
+        supabase.from("project_commissions").select("*").order("sort_order"),
       ]);
       if (projects.error) throw projects.error;
       if (milestones.error) throw milestones.error;
-      return { projects: projects.data, milestones: (milestones.data ?? []) as Milestone[] };
+      if (commissions.error) throw commissions.error;
+      return {
+        projects: projects.data,
+        milestones: (milestones.data ?? []) as Milestone[],
+        commissions: (commissions.data ?? []) as Commission[],
+      };
     },
   });
 
@@ -448,10 +463,12 @@ type ProjectRow = {
 function ProjectDialog({
   project,
   projectMilestones = [],
+  projectCommissions = [],
   onSaved,
 }: {
   project?: ProjectRow;
   projectMilestones?: Milestone[];
+  projectCommissions?: Commission[];
   onSaved: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -466,6 +483,9 @@ function ProjectDialog({
     notes: project?.notes ?? "",
   });
   const [stations, setStations] = useState<MilestoneDraft[]>([]);
+  const [commissions, setCommissions] = useState<
+    { id?: string; supplier_name: string; amount: string; expected_date: string }[]
+  >([]);
 
   // Load the project's existing payment terms into the editor each time it opens.
   useEffect(() => {
@@ -482,10 +502,21 @@ function ProjectDialog({
           status: m.status,
         })),
     );
+    setCommissions(
+      [...projectCommissions]
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map((c) => ({
+          id: c.id,
+          supplier_name: c.supplier_name,
+          amount: String(c.amount ?? ""),
+          expected_date: c.expected_date ?? "",
+        })),
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const fee = Number(form.fee_total) || 0;
+  const commissionsTotal = commissions.reduce((s, c) => s + (Number(c.amount) || 0), 0);
   const stationsTotal = stations.reduce(
     (s, m) => s + milestoneAmount(m.amount_type, Number(m.amount_value) || 0, fee),
     0,
@@ -511,6 +542,7 @@ function ProjectDialog({
         const { error } = await supabase.from("projects").update(payload).eq("id", project.id);
         if (error) throw error;
         await saveStations(project.id);
+        await saveCommissions(project.id);
       } else {
         const { data, error } = await supabase
           .from("projects")
@@ -518,7 +550,10 @@ function ProjectDialog({
           .select("id")
           .single();
         if (error) throw error;
-        if (data) await saveStations(data.id);
+        if (data) {
+          await saveStations(data.id);
+          await saveCommissions(data.id);
+        }
       }
     },
     onSuccess: () => {
@@ -533,6 +568,29 @@ function ProjectDialog({
           : "שמירה נכשלה – ודא שקוד הפרויקט ייחודי ושכל השדות מולאו",
       ),
   });
+
+  async function saveCommissions(projectId: string) {
+    const valid = commissions.filter((c) => c.supplier_name.trim());
+    const keptIds = valid.map((c) => c.id).filter(Boolean) as string[];
+    const removed = projectCommissions.filter((c) => !keptIds.includes(c.id)).map((c) => c.id);
+    if (removed.length > 0) {
+      const { error } = await supabase.from("project_commissions").delete().in("id", removed);
+      if (error) throw error;
+    }
+    for (let i = 0; i < valid.length; i++) {
+      const c = valid[i];
+      const row = {
+        supplier_name: c.supplier_name.trim(),
+        amount: Number(c.amount) || 0,
+        expected_date: c.expected_date || null,
+        sort_order: i,
+      };
+      const { error } = c.id
+        ? await supabase.from("project_commissions").update(row).eq("id", c.id)
+        : await supabase.from("project_commissions").insert({ ...row, project_id: projectId });
+      if (error) throw error;
+    }
+  }
 
   async function saveStations(projectId: string) {
     const valid = stations.filter((s) => s.title.trim());
@@ -772,6 +830,81 @@ function ProjectDialog({
                       ? `חריגה של ${fmtMoney(stationsTotal - fee)}`
                       : `נותר להשלים ${fmtMoney(fee - stationsTotal)}`
                   }. סכום כל התחנות יחד חייב להיות 100% משכר הטרחה (כל תחנה בנפרד יכולה להיות כל אחוז).`}
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-3 rounded-lg border border-border p-4 sm:col-span-2">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold">עמלות מספקים</h3>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  setCommissions([...commissions, { supplier_name: "", amount: "", expected_date: "" }])
+                }
+              >
+                <Plus className="size-4" />
+                הוספת עמלה
+              </Button>
+            </div>
+            {commissions.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                עמלות מספקים יתווספו לסך ההכנסה מהפרויקט בחישובי הרווחיות.
+              </p>
+            )}
+            {commissions.map((c, idx) => (
+              <div
+                key={idx}
+                className="grid gap-2 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1.2fr)_auto] sm:items-center"
+              >
+                <Input
+                  aria-label="שם הספק"
+                  placeholder="שם הספק"
+                  value={c.supplier_name}
+                  onChange={(e) => {
+                    const n = [...commissions];
+                    n[idx] = { ...c, supplier_name: e.target.value };
+                    setCommissions(n);
+                  }}
+                />
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  className="font-mono tabular-nums"
+                  aria-label="סכום העמלה"
+                  placeholder="סכום ₪"
+                  value={c.amount}
+                  onChange={(e) => {
+                    const n = [...commissions];
+                    n[idx] = { ...c, amount: e.target.value.replace(/[^\d.]/g, "").slice(0, 10) };
+                    setCommissions(n);
+                  }}
+                />
+                <Input
+                  type="date"
+                  aria-label="תאריך תשלום צפוי"
+                  value={c.expected_date}
+                  onChange={(e) => {
+                    const n = [...commissions];
+                    n[idx] = { ...c, expected_date: e.target.value };
+                    setCommissions(n);
+                  }}
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="מחיקת עמלה"
+                  onClick={() => setCommissions(commissions.filter((_, i) => i !== idx))}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </div>
+            ))}
+            {commissions.length > 0 && (
+              <p className="text-sm text-muted-foreground">
+                סך עמלות: {fmtMoney(commissionsTotal)} · סך הכנסה מהפרויקט:{" "}
+                {fmtMoney(fee + commissionsTotal)}
               </p>
             )}
           </div>
