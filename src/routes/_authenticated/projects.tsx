@@ -82,6 +82,8 @@ type Commission = {
   supplier_name: string;
   amount: number;
   expected_date: string | null;
+  paid_amount: number;
+  paid_date: string | null;
   sort_order: number;
 };
 
@@ -138,7 +140,16 @@ function ProjectsPage() {
         p.name.toLowerCase().includes(q) ||
         (p.client_name ?? "").toLowerCase().includes(q)),
   );
-  const paidOf = (id: string, fee: number) =>
+  const allCommissions = projectsQ.data?.commissions ?? [];
+  const commOf = (id: string) => {
+    const cs = allCommissions.filter((c) => c.project_id === id);
+    return {
+      total: cs.reduce((s, c) => s + (Number(c.amount) || 0), 0),
+      paid: cs.reduce((s, c) => s + Math.min(Number(c.paid_amount) || 0, Number(c.amount) || 0), 0),
+    };
+  };
+  const paidOf = (id: string, fee: number) => commOf(id).paid + paidMsOf(id, fee);
+  const paidMsOf = (id: string, fee: number) =>
     milestones
       .filter((m) => m.project_id === id)
       .reduce((s, m) => {
@@ -149,9 +160,10 @@ function ProjectsPage() {
     code: (p) => p.code,
     name: (p) => p.name,
     client: (p) => p.client_name ?? "",
-    fee: (p) => Number(p.fee_total) || 0,
+    fee: (p) => (Number(p.fee_total) || 0) + commOf(p.id).total,
     paid: (p) => paidOf(p.id, Number(p.fee_total) || 0),
-    outstanding: (p) => (Number(p.fee_total) || 0) - paidOf(p.id, Number(p.fee_total) || 0),
+    outstanding: (p) =>
+      (Number(p.fee_total) || 0) + commOf(p.id).total - paidOf(p.id, Number(p.fee_total) || 0),
     status: (p) => p.status,
     start_date: (p) => p.start_date ?? "",
   });
@@ -316,7 +328,8 @@ function ProjectsPage() {
                 return (
                   s + (m.status === "paid" ? full : Math.min(Number(m.paid_amount) || 0, full))
                 );
-              }, 0);
+              }, 0) + commOf(p.id).paid;
+              const income = Number(p.fee_total) + commOf(p.id).total;
               const open = ms.find((m) => m.status !== "paid");
               const late =
                 open?.due_date && daysBetween(open.due_date, todayIso()) > 0
@@ -353,9 +366,9 @@ function ProjectsPage() {
                     )}
                   </td>
                   <td className="p-3">{p.client_name || "—"}</td>
-                  <td className="p-3">{fmtMoney(Number(p.fee_total))}</td>
+                  <td className="p-3">{fmtMoney(income)}</td>
                   <td className="p-3">{fmtMoney(paid)}</td>
-                  <td className="p-3 font-medium">{fmtMoney(Number(p.fee_total) - paid)}</td>
+                  <td className="p-3 font-medium">{fmtMoney(income - paid)}</td>
                   <td className={`p-3 ${late ? "font-semibold text-destructive" : ""}`}>
                     {open ? open.title : "הושלם"}
                     {late > 0 && (
@@ -487,7 +500,14 @@ function ProjectDialog({
   });
   const [stations, setStations] = useState<MilestoneDraft[]>([]);
   const [commissions, setCommissions] = useState<
-    { id?: string; supplier_name: string; amount: string; expected_date: string }[]
+    {
+      id?: string;
+      supplier_name: string;
+      amount: string;
+      expected_date: string;
+      paid_amount: string;
+      paid_date: string;
+    }[]
   >([]);
 
   // Load the project's existing payment terms into the editor each time it opens.
@@ -513,6 +533,8 @@ function ProjectDialog({
           supplier_name: c.supplier_name,
           amount: String(c.amount ?? ""),
           expected_date: c.expected_date ?? "",
+          paid_amount: Number(c.paid_amount) ? String(c.paid_amount) : "",
+          paid_date: c.paid_date ?? "",
         })),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -586,6 +608,8 @@ function ProjectDialog({
         supplier_name: c.supplier_name.trim(),
         amount: Number(c.amount) || 0,
         expected_date: c.expected_date || null,
+        paid_amount: Math.min(Number(c.paid_amount) || 0, Number(c.amount) || 0),
+        paid_date: c.paid_date || null,
         sort_order: i,
       };
       const { error } = c.id
@@ -844,7 +868,10 @@ function ProjectDialog({
                 size="sm"
                 variant="outline"
                 onClick={() =>
-                  setCommissions([...commissions, { supplier_name: "", amount: "", expected_date: "" }])
+                  setCommissions([
+                    ...commissions,
+                    { supplier_name: "", amount: "", expected_date: "", paid_amount: "", paid_date: "" },
+                  ])
                 }
               >
                 <Plus className="size-4" />
@@ -902,6 +929,51 @@ function ProjectDialog({
                 >
                   <Trash2 className="size-4" />
                 </Button>
+                <div className="flex flex-wrap items-center gap-2 sm:col-span-4">
+                  <Label className="text-xs text-muted-foreground">נגבה (₪)</Label>
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    className="w-32 font-mono tabular-nums"
+                    aria-label="סכום שנגבה"
+                    placeholder="0"
+                    value={c.paid_amount}
+                    onChange={(e) => {
+                      const n = [...commissions];
+                      n[idx] = { ...c, paid_amount: e.target.value.replace(/[^\d.]/g, "").slice(0, 10) };
+                      setCommissions(n);
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      const n = [...commissions];
+                      n[idx] = { ...c, paid_amount: c.amount, paid_date: c.paid_date || todayIso() };
+                      setCommissions(n);
+                    }}
+                  >
+                    סמן כשולם במלואו
+                  </Button>
+                  <Label className="text-xs text-muted-foreground">תאריך גבייה</Label>
+                  <Input
+                    type="date"
+                    className="w-40"
+                    aria-label="תאריך גבייה"
+                    value={c.paid_date}
+                    onChange={(e) => {
+                      const n = [...commissions];
+                      n[idx] = { ...c, paid_date: e.target.value };
+                      setCommissions(n);
+                    }}
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    {(Number(c.paid_amount) || 0) >= (Number(c.amount) || 0) && Number(c.amount) > 0
+                      ? "שולם"
+                      : `יתרה: ${fmtMoney(Math.max(0, (Number(c.amount) || 0) - (Number(c.paid_amount) || 0)))}`}
+                  </span>
+                </div>
               </div>
             ))}
             {commissions.length > 0 && (
