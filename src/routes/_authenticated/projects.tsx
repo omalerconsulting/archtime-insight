@@ -379,6 +379,9 @@ function ProjectsPage() {
                       <ProjectDialog
                         project={p}
                         projectMilestones={ms}
+                        projectCommissions={(projectsQ.data?.commissions ?? []).filter(
+                          (c) => c.project_id === p.id,
+                        )}
                         onSaved={() => qc.invalidateQueries({ queryKey: ["projects-full"] })}
                       />
                       <Button
