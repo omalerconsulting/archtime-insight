@@ -333,6 +333,47 @@ export type Database = {
         }
         Relationships: []
       }
+      project_commissions: {
+        Row: {
+          amount: number
+          created_at: string
+          expected_date: string | null
+          id: string
+          project_id: string
+          sort_order: number
+          supplier_name: string
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          expected_date?: string | null
+          id?: string
+          project_id: string
+          sort_order?: number
+          supplier_name?: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          expected_date?: string | null
+          id?: string
+          project_id?: string
+          sort_order?: number
+          supplier_name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_commissions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_hours: {
         Row: {
           created_at: string
