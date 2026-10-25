@@ -45,4 +45,17 @@ describe("bank and accountant statement formats", () => {
     expect(text).toContain("גיליון: גיליון אחרון\nעסקה אחרונה\t987.65");
     expect(statementInputSchema.safeParse({ filename: "full.xlsx", mime: "text/plain", text }).success).toBe(true);
   });
+  it("ignores formatting-only outer columns but preserves populated distant and hidden cells", async () => {
+    const book = XLSX.utils.book_new();
+    const sheet = XLSX.utils.aoa_to_sheet([["תיאור", "חובה"], ["תוכנה", 350.25]]);
+    sheet.Z100 = { t: "n", v: 987.65 };
+    sheet.AA100 = { t: "s", v: "" };
+    sheet["!ref"] = "A1:AZ120";
+    sheet["!rows"] = Array.from({ length: 100 }, (_, i) => ({ hidden: i === 99 }));
+    XLSX.utils.book_append_sheet(book, sheet, "בנק");
+    const text = await extractStatementExcel(XLSX.write(book, { type: "array", bookType: "xlsx" }));
+    expect(text).toContain("תוכנה\t350.25");
+    expect(text).toContain("987.65");
+    expect(text.length).toBeLessThan(200);
+  });
 });
