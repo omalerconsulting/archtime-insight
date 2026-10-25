@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Printer } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminOnly } from "@/components/AdminOnly";
+import { incomeVat } from "@/lib/income-vat";
 import { SortControls, sortRows, type SortDir } from "@/components/SortControls";
 import { daysBetween, fmtDate, fmtMoney, milestoneAmount, monthLabel, todayIso } from "@/lib/time";
 import { Button } from "@/components/ui/button";
@@ -92,7 +93,7 @@ function FinancePage() {
           milestone: m,
           full,
           collected,
-          amount,
+          amount: incomeVat(amount, p).gross,
           lateDays:
             amount > 0 && m.due_date && daysBetween(m.due_date, todayIso()) > 0
               ? daysBetween(m.due_date, todayIso())
@@ -156,6 +157,7 @@ function FinancePage() {
           <p className="text-sm text-muted-foreground">
             תמונת מצב לישיבת הנהלה – מה כבר חויב, מה עדיין בחוץ ומה חורג מהלו״ז
           </p>
+          <p className="text-xs text-muted-foreground">יתרות וצפי גבייה כולל מע״מ לבנק; עדכון סכום שנגבה לפי בסיס הסכום שנבחר בפרויקט.</p>
         </div>
         <Button onClick={() => window.print()}>
           <Printer className="size-4" />
@@ -290,7 +292,7 @@ function FinancePage() {
                   <td className="p-3">{r.project.client_name || "—"}</td>
                   <td className="p-3">{r.milestone.title}</td>
                   <td className="p-3">{fmtMoney(r.amount)}</td>
-                  <td className="p-3">{fmtMoney(r.collected)} מתוך {fmtMoney(r.full)}</td>
+                  <td className="p-3">{fmtMoney(incomeVat(r.collected, r.project).gross)} מתוך {fmtMoney(incomeVat(r.full, r.project).gross)}</td>
                   <td className={`p-3 ${r.lateDays ? "font-semibold text-destructive" : ""}`}>
                     {r.milestone.due_date ? fmtDate(r.milestone.due_date) : "—"}
                     {r.lateDays > 0 && ` · חריגה ${r.lateDays} ימים`}

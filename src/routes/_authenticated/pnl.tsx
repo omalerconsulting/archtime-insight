@@ -475,7 +475,7 @@ function ExpensesTab({ expenses, onChanged, initialId }: { expenses: Expense[]; 
                 <td className="p-2"><Checkbox aria-label={`סימון הוצאה ${e.description}`} checked={selected.includes(e.id)} onCheckedChange={v=>setSelected(v ? [...selected,e.id] : selected.filter(id=>id!==e.id))} /></td>
                 <td className="p-2">{e.expense_date}</td>
                 <td className="p-2">{catLabel(e.category)}</td>
-                <td className="p-2 font-medium"><Button variant="link" className="h-auto whitespace-normal p-0 text-start" onClick={() => editExpense(e)}}>{e.description}</Button></td>
+                <td className="p-2 font-medium"><Button variant="link" className="h-auto whitespace-normal p-0 text-start" onClick={() => editExpense(e)}>{e.description}</Button></td>
                 <td className="p-2">{e.vendor || "—"}</td>
                 <td className="p-2">{fmtMoney(Number(e.amount))}</td>
                 <td className="p-2">
