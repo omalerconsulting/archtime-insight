@@ -151,7 +151,7 @@ function PnlPage() {
       {q.isError && <p role="alert" className="text-destructive">טעינת הנתונים נכשלה. <Button variant="link" onClick={()=>void q.refetch()}>ניסיון נוסף</Button></p>}
       <FinanceDuplicates pairs={duplicatePairs} approved={q.data?.reviews ?? []} onChanged={invalidate} onEdit={(kind,id)=>{ setEditTarget({kind,id}); setTab(kind === "expense" ? "expenses" : "incomes"); }} />
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="no-print print:hidden">
+        <TabsList className="no-print h-auto max-w-full flex-wrap print:hidden">
           <TabsTrigger value="summary">תחזית שנתית</TabsTrigger>
           <TabsTrigger value="expenses">הוצאות</TabsTrigger>
           <TabsTrigger value="incomes">הכנסות נוספות</TabsTrigger>
