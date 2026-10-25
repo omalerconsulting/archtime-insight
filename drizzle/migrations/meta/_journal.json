@@ -50,6 +50,13 @@
       "when": 1792905174524,
       "tag": "0006_finance_duplicate_reviews",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792906499386,
+      "tag": "0007_income_vat_basis",
+      "breakpoints": true
     }
   ]
 }

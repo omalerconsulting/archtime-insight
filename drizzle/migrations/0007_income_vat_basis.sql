@@ -1,0 +1,5 @@
+ALTER TABLE public.other_incomes ADD COLUMN vat_included boolean NOT NULL DEFAULT false, ADD COLUMN vat_rate numeric NOT NULL DEFAULT 0 CHECK (vat_rate >= 0 AND vat_rate <= 100);
+ALTER TABLE public.projects ADD COLUMN vat_included boolean NOT NULL DEFAULT false, ADD COLUMN vat_rate numeric NOT NULL DEFAULT 0 CHECK (vat_rate >= 0 AND vat_rate <= 100);
+ALTER TABLE public.project_commissions ADD COLUMN vat_included boolean NOT NULL DEFAULT false, ADD COLUMN vat_rate numeric NOT NULL DEFAULT 0 CHECK (vat_rate >= 0 AND vat_rate <= 100);
+COMMENT ON COLUMN public.other_incomes.vat_rate IS 'Income VAT percentage; legacy entries retain zero until administrator review. Milestone amounts and paid amounts share the parent entered VAT basis.';
+COMMENT ON COLUMN public.projects.vat_rate IS 'Income VAT percentage; legacy entries retain zero until administrator review. Milestone amounts and paid amounts share the project entered VAT basis.';
