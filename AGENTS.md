@@ -13,6 +13,7 @@
 - Build monthly P&L totals and drilldown details from `src/lib/pnl-ledger.ts` together so line items always reconcile to totals, including manual adjustments.
 - Statement scanning uses an admin-verified server function and request-local streamed Lovable AI calls; return proposals only, because every imported transaction requires explicit review and approval.
 - Approved statement rows carry a document transaction fingerprint with a database uniqueness guarantee to prevent repeat uploads from creating duplicate expenses.
+- Statement import paginates all stored expenses after scanning and immediately before saving; reuse finance duplicate rules, retain merged-row fingerprints, and bind each explicit duplicate decision to candidate and match snapshots so edits or newly added matches require fresh review.
 - Derive expense entry-source labels from the preserved statement import fingerprint rather than mutable notes; editing must not change the original source.
 - Finance duplicate approvals persist as administrator-only row-pair fingerprints including matching fields; changed transactions require fresh review, and suspected duplicates remain in the ledger until corrected or deleted.
 - Expense merges use an administrator-checked atomic database function with row locks and snapshot validation; absorbed rows stay excluded from the ledger but retain import fingerprints to prevent repeat statement imports.
