@@ -19,6 +19,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { BulkFinanceActions } from "@/components/BulkFinanceActions";
 import { FinanceDuplicates } from "@/components/FinanceDuplicates";
+import { ExpenseSourceBadge } from "@/components/ExpenseSourceBadge";
 import { findDuplicates, suggestRecurring } from "@/lib/finance-review";
 import { AUTHORITY_NOTE, printFullPnl } from "@/lib/pnl-print";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -466,6 +467,7 @@ function ExpensesTab({ expenses, onChanged, initialId }: { expenses: Expense[]; 
               <th scope="col" className="p-2 text-start">ספק</th>
               <th scope="col" className="p-2 text-start">סכום</th>
               <th scope="col" className="p-2 text-start">סוג</th>
+              <th scope="col" className="p-2 text-start">מקור הזנה</th>
               <th scope="col" className="p-2 text-start">פעולות</th>
             </tr>
           </thead>
@@ -483,6 +485,7 @@ function ExpensesTab({ expenses, onChanged, initialId }: { expenses: Expense[]; 
                     ? `קבועה חודשית${e.recurring_until ? ` · עד ${e.recurring_until}` : ""}`
                     : "חד פעמית"}
                 </td>
+                <td className="p-2"><ExpenseSourceBadge expense={e} /></td>
                 <td className="p-2">
                   <Button size="icon" variant="ghost" title="עריכת הוצאה" aria-label={`עריכת ההוצאה ${e.description}`} onClick={() => editExpense(e)}><Pencil className="size-4" /></Button>
                   <Button
