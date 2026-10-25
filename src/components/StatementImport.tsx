@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { Fragment as ReactFragment, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { ScanLine, Loader2, FileText, RotateCcw, Upload, CheckCircle2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
@@ -7,6 +7,7 @@ import { scanStatement } from "@/lib/statement-scan.functions";
 import { EXPENSE_CATEGORIES, catLabel, validDate, type Expense } from "@/lib/pnl-ledger";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { suggestRecurring } from "@/lib/finance-review";
@@ -15,7 +16,7 @@ import { checkScanDuplicates, scanNeedsDecision, type ScanExpense, type StoredSc
 import { extractStatementExcel, statementFileKind, statementInputSchema, STATEMENT_MAX_BYTES } from "@/lib/statement-input";
 import { runStatementBatch } from "@/lib/statement-batch";
 
-type Proposal = { description: string; vendor: string; amount: number; expense_date: string; category: string; warning: string; selected: boolean; importKey: string; is_recurring: boolean; recurring_until: string; decision: "add" | "skip" | ""; reviewedFingerprint: string };
+type Proposal = { description: string; vendor: string; amount: number; expense_date: string; category: string; warning: string; original_text: string; source_location: string; selected: boolean; importKey: string; is_recurring: boolean; recurring_until: string; decision: "add" | "skip" | ""; reviewedFingerprint: string };
 type ScanDocument = { id: string; file: File; status: "queued" | "scanning" | "ready" | "error" | "saved"; rows: Proposal[]; warnings: string[]; error: string; savedCount: number };
 const statusLabel = { queued: "ממתין לסריקה", scanning: "בסריקה", ready: "מוכן לבדיקה", error: "הסריקה נכשלה", saved: "נשמר" };
 const asExpense = (r: Proposal): ScanExpense => ({ ...r, recurring_until: r.is_recurring && r.recurring_until ? r.recurring_until : null });
@@ -124,18 +125,18 @@ export function StatementImport({ expenses, onSaved }: { expenses: Expense[]; on
             <span className="min-w-0 whitespace-normal break-words"><span className="block font-medium">{d.file.name}</span><span className="block text-xs text-muted-foreground">{statusLabel[d.status]} · {d.rows.length} שורות{d.savedCount > 0 ? ` · ${d.savedCount} נשמרו` : ""}{d.warnings.length > 0 ? ` · ${d.warnings.length} הערות` : ""}</span></span>
           </Button>)}
         </div>
-        {active && <h3 className="break-words font-semibold">{active.file.name}</h3>}
+        {active && <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="break-words font-semibold">{active.file.name}</h3><Button variant="outline" onClick={() => { const url = URL.createObjectURL(active.file); const link = document.createElement("a"); link.href = url; link.target = "_blank"; link.rel = "noopener noreferrer"; if (statementFileKind(active.file) === "excel") link.download = active.file.name; link.click(); setTimeout(() => URL.revokeObjectURL(url), 60000); }}><FileText className="size-4" />הקובץ המקורי</Button></div>}
         {active?.status === "scanning" || active?.status === "queued" ? <div className="flex items-center gap-3 py-8" role="status"><Loader2 className="size-5 animate-spin motion-reduce:animate-none" />{statusLabel[active.status]}…</div> : active?.status === "error" ? <div className="space-y-3 border-s-2 border-destructive ps-3">
           <p className="break-words text-sm text-destructive" role="alert">{active.error}</p>
           <div className="flex flex-wrap gap-2"><Button variant="outline" disabled={busy || saving} onClick={() => void upload([active.file], active.id)}><RotateCcw className="size-4" />ניסיון נוסף</Button><Button variant="outline" disabled={busy || saving} onClick={() => { replacementId.current = active.id; replacementInput.current?.click(); }}><Upload className="size-4" />החלפת קובץ</Button></div>
         </div> : <fieldset disabled={saving} className="min-w-0 space-y-3">
           {warnings.length > 0 && <ul className="list-inside list-disc text-sm text-warning">{warnings.map((w,i) => <li key={i}>{w}</li>)}</ul>}
-          <div className="overflow-x-auto"><table className="w-full min-w-[1100px] text-sm"><thead><tr>{["אישור", "תאריך / חודש", "תיאור", "ספק", "קטגוריה", "סכום (₪)", "סוג", "קבועה עד", "בדיקה"].map(h => <th key={h} className="p-2 text-start">{h}</th>)}</tr></thead><tbody>
-            {rows.map((r,i) => <tr key={r.importKey} className="border-t border-border">
+          <div className="overflow-x-auto"><table className="w-full min-w-[1500px] table-fixed text-sm"><colgroup>{[80,150,260,180,210,120,160,150,290].map((width,i) => <col key={i} width={width} />)}</colgroup><thead><tr>{["אישור", "תאריך / חודש", "תיאור", "ספק", "קטגוריה", "סכום (₪)", "סוג", "קבועה עד", "בדיקה"].map(h => <th key={h} className="p-2 text-start">{h}</th>)}</tr></thead><tbody>
+            {rows.map((r,i) => <ReactFragment key={r.importKey}><tr className="border-t border-border bg-muted/40"><td colSpan={9} className="p-3"><div className="max-w-3xl space-y-1" aria-label={`רשומה מקורית ${i+1}`}><p className="text-xs font-semibold">רשומה מקורית · {r.source_location || "מיקום לא זוהה"}</p><p className="whitespace-pre-wrap break-words text-sm leading-relaxed" dir="auto">{r.original_text || "לא התקבל תמלול מקור — יש לבדוק בקובץ המקורי לפני אישור."}</p></div></td></tr><tr>
               <td className="p-2"><Checkbox aria-label={`אישור שורה ${i+1}`} disabled={saving || checks[i]?.blocked} checked={r.selected} onCheckedChange={v => change(i,{selected:v===true})} /></td>
               <td className="p-2"><Input type="date" className="w-36" aria-label={`תאריך שורה ${i+1}`} value={r.expense_date} onChange={e => change(i,{expense_date:e.target.value})} /></td>
-              <td className="p-2"><Input aria-label={`תיאור שורה ${i+1}`} value={r.description} onChange={e => change(i,{description:e.target.value})} /></td>
-              <td className="p-2"><Input aria-label={`ספק שורה ${i+1}`} value={r.vendor} onChange={e => change(i,{vendor:e.target.value})} /></td>
+              <td className="p-2"><Textarea rows={2} className="min-h-20 w-full resize-y" aria-label={`תיאור שורה ${i+1}`} value={r.description} onChange={e => change(i,{description:e.target.value})} /></td>
+              <td className="p-2"><Textarea rows={2} className="min-h-20 w-full resize-y" aria-label={`ספק שורה ${i+1}`} value={r.vendor} onChange={e => change(i,{vendor:e.target.value})} /></td>
               <td className="p-2"><Select value={r.category} onValueChange={v => change(i,{category:v})}><SelectTrigger className="w-48" aria-label={`קטגוריה שורה ${i+1}`}><SelectValue /></SelectTrigger><SelectContent>{EXPENSE_CATEGORIES.map(c => <SelectItem value={c.value} key={c.value}>{c.label}</SelectItem>)}</SelectContent></Select></td>
               <td className="p-2"><Input type="number" step="0.01" className="w-28" aria-label={`סכום שורה ${i+1}`} value={r.amount} onChange={e => change(i,{amount:Number(e.target.value)})} /></td>
               <td className="p-2"><Select value={r.is_recurring ? "fixed" : "temporary"} onValueChange={v=>change(i,{is_recurring:v==="fixed"})}><SelectTrigger className="w-36" aria-label={`סוג הוצאה שורה ${i+1}`}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="fixed">קבועה חודשית</SelectItem><SelectItem value="temporary">זמנית</SelectItem></SelectContent></Select></td>
@@ -156,7 +157,7 @@ export function StatementImport({ expenses, onSaved }: { expenses: Expense[]; on
                   </Select>
                 </div> : <p className="text-muted-foreground">{r.decision === "skip" ? "לא תתווסף" : "לא נמצאה כפילות"}</p>}
               </td>
-            </tr>)}
+            </tr></ReactFragment>)}
           </tbody></table></div>
           {!rows.length && <p className="text-muted-foreground">{active?.status === "saved" ? "כל השורות שאושרו במסמך נשמרו." : "לא זוהו הוצאות לאישור."}</p>}
           {active?.status === "ready" && !rows.length && <Button variant="outline" disabled={busy || saving} onClick={() => { replacementId.current = active.id; replacementInput.current?.click(); }}><Upload className="size-4" />החלפת קובץ</Button>}
