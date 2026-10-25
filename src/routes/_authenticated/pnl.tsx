@@ -566,10 +566,10 @@ function ExpensesTab({ expenses, onChanged, initialId }: { expenses: Expense[]; 
                 </td>
               </tr>
             ))}
-            {expenses.length === 0 && (
+            {filtered.length === 0 && (
               <tr>
                 <td colSpan={9} className="p-6 text-center text-muted-foreground">
-                  עדיין לא הוזנו הוצאות.
+                  {expenses.length === 0 ? "עדיין לא הוזנו הוצאות." : "אין הוצאות שתואמות לסינון הנבחר."}
                 </td>
               </tr>
             )}
