@@ -17,4 +17,4 @@
 - [x] Persistent duplicate review with correction and explicit approval.
 - [x] Complete printable P&L with details and current/next-month forecasts.
 - [x] Verify administrator-only access, calculations and real UI flows.
-- [x] Limited-company administrator forecast calculator: target profit, existing expenses by accounting category, entered accountant tax assumptions, retained/dividend scenarios, revenue and deal/installment planning.
+- [x] Limited-company administrator forecast calculator: target profit, existing expenses by accounting category, entered accountant tax assumptions, retained/dividend scenarios, revenue and deal/installment planning.- [x] Bulk review-and-update of payment dates stamped 2026-10-13 (14 project milestones): admin dialog on P&L page, per-row date edit, batch save with confirmation; verified live as admin (edit+save moved a row out of the list, test change reverted, 14 rows restored).
