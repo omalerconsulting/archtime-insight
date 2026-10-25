@@ -1,6 +1,6 @@
 # Finance management extension
-- [ ] Income VAT basis, reconciled bank receipts/profit reporting and calculator integration.
-- [ ] Repair and verify editing of existing expenses.
+- [x] Income VAT basis, reconciled bank receipts/profit reporting and calculator integration.
+- [x] Repair and verify editing of existing expenses.
 - [x] Bulk selection and confirmed deletion for expenses and additional incomes.
 - [x] Fixed/temporary expense selection, automatic monthly placement and scan review.
 - [x] Persistent duplicate review with correction and explicit approval.
