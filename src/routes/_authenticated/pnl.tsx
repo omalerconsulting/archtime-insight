@@ -501,7 +501,7 @@ function ExpensesTab({ expenses, onChanged, initialId }: { expenses: Expense[]; 
             ))}
             {expenses.length === 0 && (
               <tr>
-                <td colSpan={8} className="p-6 text-center text-muted-foreground">
+                <td colSpan={9} className="p-6 text-center text-muted-foreground">
                   עדיין לא הוזנו הוצאות.
                 </td>
               </tr>

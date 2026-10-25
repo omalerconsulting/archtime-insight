@@ -11,6 +11,7 @@ describe("expense entry source", () => {
   });
   it("preserves the scanned origin even when the description or notes are corrected", () => {
     const scanned = { import_key: "document-sha256:1", notes: "סריקת מסמך: statement.pdf" };
-    expect(expenseSource({ ...scanned, notes: "הערות מתוקנות" })).toBe("automatic");
+    const edited = { ...scanned, notes: "הערות מתוקנות" };
+    expect(expenseSource(edited)).toBe("automatic");
   });
 });
