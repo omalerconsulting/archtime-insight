@@ -539,7 +539,7 @@ function ExpensesTab({ expenses, onChanged, initialId }: { expenses: Expense[]; 
             </tr>
           </thead>
           <tbody>
-            {expenses.map((e) => (
+            {filtered.map((e) => (
               <tr key={e.id} className="border-t border-border">
                 <td className="p-2"><Checkbox aria-label={`סימון הוצאה ${e.description}`} checked={selected.includes(e.id)} onCheckedChange={v=>setSelected(v ? [...selected,e.id] : selected.filter(id=>id!==e.id))} /></td>
                 <td className="p-2">{e.expense_date}</td>
