@@ -315,6 +315,25 @@ function ExpensesTab({ expenses, onChanged, initialId }: { expenses: Expense[]; 
     notes: "",
   });
 
+  const [catFilter, setCatFilter] = useState("all");
+  const [amountFilter, setAmountFilter] = useState("all"); // all | high | low
+  const [amountThreshold, setAmountThreshold] = useState("");
+  const filtered = useMemo(
+    () =>
+      expenses.filter((e) => {
+        if (catFilter !== "all" && e.category !== catFilter) return false;
+        if (amountFilter !== "all" && amountThreshold.trim() !== "") {
+          const t = Number(amountThreshold);
+          if (Number.isFinite(t) && (amountFilter === "high" ? Number(e.amount) <= t : Number(e.amount) >= t)) return false;
+        }
+        return true;
+      }),
+    [expenses, catFilter, amountFilter, amountThreshold],
+  );
+  const filteredSum = filtered.reduce((s, e) => s + Number(e.amount), 0);
+  const filtersActive = catFilter !== "all" || (amountFilter !== "all" && amountThreshold.trim() !== "");
+  const clearFilters = () => { setCatFilter("all"); setAmountFilter("all"); setAmountThreshold(""); };
+
   const add = useMutation({
     mutationFn: async () => {
       if (!form.description.trim()) throw new Error("חסר תיאור");
@@ -454,7 +473,55 @@ function ExpensesTab({ expenses, onChanged, initialId }: { expenses: Expense[]; 
       </section>
 
       <p className="text-sm text-muted-foreground">קבועה משובצת אוטומטית מדי חודש עד תאריך הסיום; זמנית רק בחודש שנבחר. הסיווג הראשוני מוצע לפי הקטגוריה וניתן לשינוי.</p>
-      <BulkFinanceActions ids={expenses.map(e=>e.id)} selected={selected} onSelect={setSelected} onDelete={ids=>remove.mutate(ids)} busy={remove.isPending} label="הוצאות" />
+      <BulkFinanceActions ids={filtered.map(e=>e.id)} selected={selected} onSelect={setSelected} onDelete={ids=>remove.mutate(ids)} busy={remove.isPending} label="הוצאות" />
+      <section className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card p-4">
+        <div className="space-y-1">
+          <Label htmlFor="ex-filter-cat" className="text-xs text-muted-foreground">סינון לפי תחום</Label>
+          <Select value={catFilter} onValueChange={setCatFilter}>
+            <SelectTrigger id="ex-filter-cat" className="w-52">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">כל התחומים</SelectItem>
+              {EXPENSE_CATEGORIES.map((c) => (
+                <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="ex-filter-amount" className="text-xs text-muted-foreground">סינון לפי סכום</Label>
+          <Select value={amountFilter} onValueChange={setAmountFilter}>
+            <SelectTrigger id="ex-filter-amount" className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">כל הסכומים</SelectItem>
+              <SelectItem value="high">סכום גבוה מ…</SelectItem>
+              <SelectItem value="low">סכום נמוך מ…</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        {amountFilter !== "all" && (
+          <div className="space-y-1">
+            <Label htmlFor="ex-filter-threshold" className="text-xs text-muted-foreground">סכום (₪)</Label>
+            <Input
+              id="ex-filter-threshold"
+              inputMode="decimal"
+              className="w-32"
+              placeholder={amountFilter === "high" ? "למשל 1000" : "למשל 500"}
+              value={amountThreshold}
+              onChange={(e) => setAmountThreshold(e.target.value.replace(/[^\d.]/g, ""))}
+            />
+          </div>
+        )}
+        {filtersActive && (
+          <Button variant="ghost" onClick={clearFilters}>ניקוי סינון</Button>
+        )}
+        <p className="ms-auto text-sm text-muted-foreground" aria-live="polite">
+          {filtered.length} מתוך {expenses.length} הוצאות · סה״כ מסונן {fmtMoney(filteredSum)}
+        </p>
+      </section>
       <section className="overflow-x-auto rounded-xl border border-border bg-card">
         <table className="w-full text-sm">
           <caption className="p-3 text-start font-semibold">כל ההוצאות</caption>
@@ -472,7 +539,7 @@ function ExpensesTab({ expenses, onChanged, initialId }: { expenses: Expense[]; 
             </tr>
           </thead>
           <tbody>
-            {expenses.map((e) => (
+            {filtered.map((e) => (
               <tr key={e.id} className="border-t border-border">
                 <td className="p-2"><Checkbox aria-label={`סימון הוצאה ${e.description}`} checked={selected.includes(e.id)} onCheckedChange={v=>setSelected(v ? [...selected,e.id] : selected.filter(id=>id!==e.id))} /></td>
                 <td className="p-2">{e.expense_date}</td>
@@ -499,10 +566,10 @@ function ExpensesTab({ expenses, onChanged, initialId }: { expenses: Expense[]; 
                 </td>
               </tr>
             ))}
-            {expenses.length === 0 && (
+            {filtered.length === 0 && (
               <tr>
                 <td colSpan={9} className="p-6 text-center text-muted-foreground">
-                  עדיין לא הוזנו הוצאות.
+                  {expenses.length === 0 ? "עדיין לא הוזנו הוצאות." : "אין הוצאות שתואמות לסינון הנבחר."}
                 </td>
               </tr>
             )}
