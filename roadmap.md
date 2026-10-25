@@ -1,5 +1,5 @@
 # Finance management extension
-- [ ] Remove the restrictive Excel text cutoff, compact empty formatting without dropping data, and verify a complete large workbook in a single scan with honest service-limit errors.
+- [x] Remove the restrictive 200000-character Excel cutoff and compact formatting-only ranges without dropping populated/hidden cells; 19 tests passed and a real 2500-transaction workbook returned both final-document and final-sheet expenses in one scan. Genuine resource/service limits remain explicit, never presented as unlimited.
 - [x] Scan multiple documents together with separate progress, editable reviews, retry/replacement on errors, and cross-document duplicate checks; 17 tests passed, administrator batch save/readback and failed-file replacement preserving other reviews verified, mobile checked and test expenses removed.
 - [x] Support Excel XLS/XLSX alongside PDF statement scans; 14 tests passed, real XLSX multi-sheet scan and approved expense save/readback verified, PDF scan verified and test row removed.
 - [x] Check every new statement against all stored expenses freshly, require per-row duplicate decisions, and verify before saving (23 tests passed; real PDF comparison, blocked undecided save and skip verified in administrator UI).
