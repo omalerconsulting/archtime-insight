@@ -212,6 +212,27 @@ html.a11y-no-motion * {
     box-shadow: none !important;
     border: none !important;
   }
+  .pnl-statement {
+    overflow: visible !important;
+  }
+  .pnl-statement table {
+    min-width: 0 !important;
+    table-layout: fixed;
+    font-size: 6pt;
+  }
+  .pnl-statement th:first-child {
+    width: 32mm;
+    min-width: 0 !important;
+    position: static !important;
+  }
+  .pnl-statement td, .pnl-statement th {
+    padding: 1mm !important;
+  }
+  .pnl-statement button {
+    height: auto !important;
+    padding: 0 !important;
+    font-size: inherit !important;
+  }
   body {
     background: #fff !important;
     color: #000 !important;
