@@ -159,11 +159,11 @@ function ProjectsPage() {
   const commOf = (id: string) => {
     const cs = allCommissions.filter((c) => c.project_id === id);
     return {
-      total: cs.reduce((s, c) => s + (Number(c.amount) || 0), 0),
-      paid: cs.reduce((s, c) => s + Math.min(Number(c.paid_amount) || 0, Number(c.amount) || 0), 0),
+      total: cs.reduce((s, c) => s + incomeVat(Number(c.amount) || 0, c).gross, 0),
+      paid: cs.reduce((s, c) => s + incomeVat(Math.min(Number(c.paid_amount) || 0, Number(c.amount) || 0), c).gross, 0),
     };
   };
-  const paidOf = (id: string, fee: number) => commOf(id).paid + paidMsOf(id, fee);
+  const paidOf = (id: string, fee: number) => commOf(id).paid + incomeVat(paidMsOf(id, fee), allProjects.find(p=>p.id===id)).gross;
   const paidMsOf = (id: string, fee: number) =>
     milestones
       .filter((m) => m.project_id === id)
@@ -175,10 +175,10 @@ function ProjectsPage() {
     code: (p) => p.code,
     name: (p) => p.name,
     client: (p) => p.client_name ?? "",
-    fee: (p) => (Number(p.fee_total) || 0) + commOf(p.id).total,
+    fee: (p) => incomeVat(Number(p.fee_total) || 0, p).gross + commOf(p.id).total,
     paid: (p) => paidOf(p.id, Number(p.fee_total) || 0),
     outstanding: (p) =>
-      (Number(p.fee_total) || 0) + commOf(p.id).total - paidOf(p.id, Number(p.fee_total) || 0),
+      incomeVat(Number(p.fee_total) || 0, p).gross + commOf(p.id).total - paidOf(p.id, Number(p.fee_total) || 0),
     status: (p) => p.status,
     start_date: (p) => p.start_date ?? "",
   });
@@ -344,10 +344,10 @@ function ProjectsPage() {
                   Number(p.fee_total),
                 );
                 return (
-                  s + (m.status === "paid" ? full : Math.min(Number(m.paid_amount) || 0, full))
+                  s + incomeVat(m.status === "paid" ? full : Math.min(Number(m.paid_amount) || 0, full), p).gross
                 );
               }, 0) + commOf(p.id).paid;
-              const income = Number(p.fee_total) + commOf(p.id).total;
+              const income = incomeVat(Number(p.fee_total), p).gross + commOf(p.id).total;
               const open = ms.find((m) => m.status !== "paid");
               const late =
                 open?.due_date && daysBetween(open.due_date, todayIso()) > 0
@@ -385,7 +385,7 @@ function ProjectsPage() {
                   </td>
                   <td className="p-3">{p.client_name || "—"}</td>
                   <td className="p-3">{(p.manager_id && staffNames.get(p.manager_id)) || "—"}</td>
-                  <td className="p-3">{fmtMoney(income)}</td>
+                  <td className="p-3">{fmtMoney(income)}<span className="block text-xs text-muted-foreground">כולל מע״מ</span></td>
                   <td className="p-3">{fmtMoney(paid)}</td>
                   <td className="p-3 font-medium">{fmtMoney(income - paid)}</td>
                   <td className={`p-3 ${late ? "font-semibold text-destructive" : ""}`}>
