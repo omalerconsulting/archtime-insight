@@ -4,11 +4,13 @@ import { getRequest, setResponseHeader } from "@tanstack/react-start/server";
 import { createLovableAiGatewayRunIdFetch } from "./ai/run-id.server.ts";
 import type { StatementInput } from "./statement-input";
 import { statementResultSchema, sourceTextMatches } from "./statement-source";
+import { statementScanFailure } from "./statement-scan-errors";
 
 export async function extractStatement(data: StatementInput, key: string, categories: { value: string; label: string }[]) {
   const request = getRequest();
   const tracked = createLovableAiGatewayRunIdFetch(request.headers.get("X-Lovable-AIG-Run-ID") ?? undefined);
   const provider = createOpenAI({ baseURL: "https://ai.gateway.lovable.dev/v1", apiKey: key, headers: { "Lovable-API-Key": key, "X-Lovable-AIG-SDK": "vercel-ai-sdk" }, fetch: tracked.fetch });
+  let streamError: unknown;
   try {
     const media = data.mime === "text/plain"
       ? { type: "text" as const, text: `תוכן כל גיליונות קובץ Excel (${data.filename}), עם כותרות ועמודות מופרדות בטאבים. קרא את כל הגיליונות; שים לב לעמודות חובה/זכות ולסיכומי רואה חשבון שאינם עסקאות.\n\n${data.text}` }
@@ -24,14 +26,19 @@ export async function extractStatement(data: StatementInput, key: string, catego
       providerOptions: { openai: { forceReasoning: true, reasoningEffort: "low", reasoningSummary: "auto", store: false, include: ["reasoning.encrypted_content"] } },
       abortSignal: request.signal,
       maxRetries: 0,
+      // Structured output can wrap an upstream 403 in NoOutputGeneratedError.
+      // Preserve the original streaming error instead of blaming the document.
+      onError: ({ error }) => { streamError = error; },
     });
     const output = await result.output;
     const runId = tracked.getRunId();
     if (runId) setResponseHeader("X-Lovable-AIG-Run-ID", runId);
     return { rows: output.rows.map(r => ({ ...r, warning: data.mime === "text/plain" && !sourceTextMatches(r.original_text, data.text) ? [r.warning, "לא נמצאה התאמה מדויקת בין התמלול לשורת המקור. יש לבדוק בקובץ המקורי לפני אישור."].filter(Boolean).join(" · ") : r.warning, category: categories.some(c => c.value === r.category) ? r.category : "general" })), warnings: output.warnings, error: null };
   } catch (e) {
-    // No automatic retries: access, credit and schema errors need a fresh user action.
-    const status = typeof e === "object" && e && "statusCode" in e ? Number(e.statusCode) : 0;
-    return { rows: [], warnings: [], error: status === 402 ? "אין מספיק יתרת Lovable AI לסריקה. ניתן להוסיף יתרה בהגדרות החבילה." : status === 403 ? "הסריקה חסומה לפי הרשאות שירות ה־AI; נדרש עדכון הרשאות לפני ניסיון נוסף." : status === 429 ? "שירות הסריקה עמוס. נסו שוב מאוחר יותר." : status === 404 ? "שירות סריקת המסמכים אינו זמין כרגע." : status === 413 || status === 400 ? "שירות הסריקה לא קיבל את המסמך המלא — ייתכן שתוכנו חורג מקיבולת השירות או שהפורמט אינו נתמך. לא הוחזרה סריקה חלקית ולא נשמרו הוצאות." : "סריקת המסמך המלא לא הושלמה. לא נשמרו הוצאות. בדקו שהמסמך קריא ונסו שוב." };
+    const failure = statementScanFailure(streamError ?? e);
+    const runId = tracked.getRunId();
+    if (runId) setResponseHeader("X-Lovable-AIG-Run-ID", runId);
+    console.error("Statement scan failed", { status: failure.status, type: failure.type, runId });
+    return { rows: [], warnings: [], error: failure.message, errorStatus: failure.status };
   }
 }

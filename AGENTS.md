@@ -12,6 +12,7 @@
 ## Financial reporting
 - Build monthly P&L totals and drilldown details from `src/lib/pnl-ledger.ts` together so line items always reconcile to totals, including manual adjustments.
 - Statement scanning uses an admin-verified server function and request-local streamed Lovable AI calls; return proposals only, because every imported transaction requires explicit review and approval.
+- Capture the original AI streaming error before structured-output parsing wraps it; preserve safe service error messages and stop unsent batch documents after service-wide blocks, because failed AI access is not evidence of unreadable files.
 - Extract XLS/XLSX sheets in the browser with dynamically loaded SheetJS and send bounded, non-empty text through the same validated administrator scan function; PDFs remain native file inputs and both formats use the same review, fingerprint and duplicate checks.
 - Submit every statement as one full document without sampling or truncation; only resource/service guards may reject it, and errors must not ask users to split files or imply unlimited model capacity.
 - Scan proposals carry immutable verbatim source text and location alongside editable normalized values; compare Excel transcriptions against submitted text and flag mismatches rather than presenting invented evidence as verified.

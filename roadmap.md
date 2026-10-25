@@ -1,4 +1,5 @@
 # Finance management extension
+- [ ] Repair misleading unreadable-PDF errors by preserving original streamed service failures and halting unsent files on service-wide blocks; verify with synthetic blocked-service tests. Live rescan blocked by the workspace AI spending cap.
 - [x] Bulk-select and explicitly approve duplicate reviews; default scan action to additional expense without implicit approval. All 20 focused tests passed and build is clean; non-admin access remains blocked.
 - [ ] Verify both bulk approval flows end-to-end in a real administrator session. Blocker: the requesting user's available session has no administrator permissions.
 - [x] Display immutable original transaction text and source location alongside wider multiline editable fields and access to the original file; 21 tests passed, real Excel/PDF source rows verified and editing amount/description preserved original text.
