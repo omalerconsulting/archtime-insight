@@ -13,7 +13,7 @@ describe("income VAT basis", () => {
   it("reconciles partial payments, forecasts and commissions on net income", () => {
     const data: LedgerData = { ...empty, projects: [{id:"p", code:"1", name:"p", fee_total:1180, vat_included:true, vat_rate:18}], milestones:[{id:"m",project_id:"p",title:"payment",amount_type:"percent",amount_value:100,status:"invoiced",paid_amount:590,paid_date:"2026-10-01",due_date:"2026-10-01"}], commissions:[{id:"c",project_id:"p",supplier_name:"c",amount:1000,paid_amount:0,paid_date:null,expected_date:"2026-10-01",vat_included:false,vat_rate:18}] };
     const row=buildLedger(data,2026)[9];
-    expect(row.income).toBe(2000); expect(row.bankActual).toBe(590); expect(row.bankForecast).toBe(1770); expect(row.incomeVatTotal).toBe(360);
+    expect(row.income).toBe(500); expect(row.sourceIncome).toBe(2000); expect(row.bankActual).toBe(590); expect(row.bankForecast).toBe(1770); expect(row.incomeVatTotal).toBe(360);
     expect(row.details.reduce((s,d)=>s+d.amount,0)).toBe(row.sourceIncome);
   });
   it("converts additional income to net without changing received gross", () => {

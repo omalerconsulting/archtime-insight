@@ -14,6 +14,14 @@ describe("accounting rules", () => {
     expect(rows[0].projectActual).toBe(200); expect(rows[1].projectForecast).toBe(300);
     rows.forEach(r => expect(r.details.filter(d => d.bucket !== "expenses").reduce((s,d) => s+d.amount,0)).toBe(r.sourceIncome));
   });
+  it("totals income and profit from actual receipts only, excluding forecast", () => {
+    const rows = buildLedger({ ...empty, projects: [{ id: "p", code: "1", name: "p", fee_total: 1000 }], milestones: [
+      { id: "paid", project_id: "p", title: "paid", amount_type: "fixed", amount_value: 400, status: "paid", paid_amount: 400, paid_date: "2027-01-10", due_date: "2027-01-10" },
+      { id: "pending", project_id: "p", title: "pending", amount_type: "fixed", amount_value: 600, status: "pending", paid_amount: 0, paid_date: null, due_date: "2027-01-20" },
+    ], expenses: [expense] }, 2027);
+    expect(rows[0].income).toBe(400); expect(rows[0].projectForecast).toBe(600); expect(rows[0].profit).toBe(-600);
+    expect(rows[0].details.filter(d => d.bucket !== "expenses").reduce((s,d) => s+d.amount,0)).toBe(rows[0].sourceIncome);
+  });
   it("reconciles manual overrides as a difference, without duplicating income", () => {
     const row = buildLedger({ ...empty, expenses: [expense], adjustments: [{ month: "2027-01-01", income_override: 5000, expense_override: 1200, note: "adjustment" }] }, 2027)[0];
     expect(row.incomeDelta).toBe(5000); expect(row.expenseDelta).toBe(200); expect(row.profit).toBe(3800);
