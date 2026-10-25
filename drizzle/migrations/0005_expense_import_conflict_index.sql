@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS expenses_import_key_conflict ON public.expenses (import_key);

@@ -5,6 +5,9 @@ import { toast } from "sonner";
 import { Plus, Printer, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminOnly } from "@/components/AdminOnly";
+import { PnlStatement } from "@/components/PnlStatement";
+import { StatementImport } from "@/components/StatementImport";
+import { EXPENSE_CATEGORIES, catLabel, buildLedger, validDate, type Expense } from "@/lib/pnl-ledger";
 import { fmtMoney, MONTH_NAMES, milestoneAmount, todayIso, yearOptions } from "@/lib/time";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,32 +41,6 @@ export const Route = createFileRoute("/_authenticated/pnl")({
   ),
 });
 
-const EXPENSE_CATEGORIES = [
-  { value: "salaries", label: "שכר עבודה" },
-  { value: "rent", label: "שכירות" },
-  { value: "utilities", label: "חשמל, מים וארנונה" },
-  { value: "software", label: "תוכנות ורישיונות" },
-  { value: "marketing", label: "שיווק ופרסום" },
-  { value: "subcontractors", label: "קבלני משנה ויועצים" },
-  { value: "office", label: "תחזוקת משרד" },
-  { value: "taxes", label: "אגרות ומיסים" },
-  { value: "general", label: "כללי" },
-];
-
-const catLabel = (v: string) => EXPENSE_CATEGORIES.find((c) => c.value === v)?.label ?? v;
-
-type Expense = {
-  id: string;
-  category: string;
-  description: string;
-  vendor: string | null;
-  amount: number;
-  expense_date: string;
-  is_recurring: boolean;
-  recurring_until: string | null;
-  notes: string | null;
-};
-
 type OtherIncome = {
   id: string;
   source: string;
@@ -87,8 +64,6 @@ type OtherMilestone = {
   sort_order: number;
 };
 
-const monthKey = (iso: string) => iso.slice(0, 7);
-
 function PnlPage() {
   const qc = useQueryClient();
   const [year, setYear] = useState(new Date().getFullYear());
@@ -103,7 +78,7 @@ function PnlPage() {
         supabase.from("other_incomes").select("*").order("created_at", { ascending: false }),
         supabase.from("other_income_milestones").select("*").order("sort_order"),
         supabase.from("pnl_adjustments").select("*"),
-        supabase.from("project_commissions").select("project_id, amount, expected_date, paid_amount, paid_date"),
+        supabase.from("project_commissions").select("id, project_id, supplier_name, amount, expected_date, paid_amount, paid_date"),
       ]);
       for (const r of [projects, milestones, expenses, incomes, incomeMs, adj, comms]) {
         if (r.error) throw r.error;
@@ -122,115 +97,7 @@ function PnlPage() {
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["pnl"] });
 
-  const months = useMemo(
-    () =>
-      Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, "0")}`),
-    [year],
-  );
-
-  const rows = useMemo(() => {
-    const d = q.data;
-    const base = months.map((key) => ({
-      key,
-      label: `${MONTH_NAMES[Number(key.slice(5)) - 1]} ${year}`,
-      projectActual: 0,
-      projectForecast: 0,
-      otherActual: 0,
-      otherForecast: 0,
-      expenses: 0,
-    }));
-    if (!d)
-      return base.map((r) => ({
-        ...r,
-        note: "",
-        overridden: false,
-        income: 0,
-        totalExpenses: 0,
-        profit: 0,
-      }));
-    const byKey = new Map(base.map((r) => [r.key, r]));
-
-    d.milestones.forEach((m) => {
-      const project = d.projects.find((p) => p.id === m.project_id);
-      if (!project) return;
-      const full = milestoneAmount(m.amount_type, Number(m.amount_value), Number(project.fee_total));
-      const collected = m.status === "paid" ? full : Math.min(Number(m.paid_amount) || 0, full);
-      const remaining = Math.max(0, full - collected);
-      if (collected > 0) {
-        const k = monthKey(m.paid_date || m.due_date || "");
-        const row = byKey.get(k);
-        if (row) row.projectActual += collected;
-      }
-      if (remaining > 0 && m.due_date) {
-        const row = byKey.get(monthKey(m.due_date));
-        if (row) row.projectForecast += remaining;
-      }
-    });
-
-    // Supplier commissions on projects count as project income in their expected month.
-    // Collected part counts as actual in the collection month; the rest is forecast.
-    d.commissions.forEach((c) => {
-      const amount = Number(c.amount) || 0;
-      const collected = Math.min(Number(c.paid_amount) || 0, amount);
-      const remaining = Math.max(0, amount - collected);
-      if (collected > 0) {
-        const row = byKey.get(monthKey(c.paid_date || c.expected_date || ""));
-        if (row) row.projectActual += collected;
-      }
-      if (remaining > 0 && c.expected_date) {
-        const row = byKey.get(monthKey(c.expected_date));
-        if (row) row.projectForecast += remaining;
-      }
-    });
-
-    d.incomeMs.forEach((m) => {
-      const inc = d.incomes.find((i) => i.id === m.income_id);
-      if (!inc) return;
-      const full = milestoneAmount(m.amount_type, Number(m.amount_value), Number(inc.total_amount));
-      const collected = m.status === "paid" ? full : Math.min(Number(m.paid_amount) || 0, full);
-      const remaining = Math.max(0, full - collected);
-      if (collected > 0) {
-        const row = byKey.get(monthKey(m.paid_date || m.due_date || ""));
-        if (row) row.otherActual += collected;
-      }
-      if (remaining > 0 && m.due_date) {
-        const row = byKey.get(monthKey(m.due_date));
-        if (row) row.otherForecast += remaining;
-      }
-    });
-
-    d.expenses.forEach((e) => {
-      const amount = Number(e.amount) || 0;
-      if (!e.is_recurring) {
-        const row = byKey.get(monthKey(e.expense_date));
-        if (row) row.expenses += amount;
-        return;
-      }
-      months.forEach((k) => {
-        const first = `${k}-01`;
-        if (first < e.expense_date.slice(0, 7) + "-01") return;
-        if (e.recurring_until && first > e.recurring_until) return;
-        byKey.get(k)!.expenses += amount;
-      });
-    });
-
-    return base.map((r) => {
-      const a = d.adjustments.find((x) => x.month === `${r.key}-01`);
-      const income =
-        a?.income_override != null
-          ? Number(a.income_override)
-          : r.projectActual + r.projectForecast + r.otherActual + r.otherForecast;
-      const expenses = a?.expense_override != null ? Number(a.expense_override) : r.expenses;
-      return {
-        ...r,
-        note: a?.note ?? "",
-        overridden: a?.income_override != null || a?.expense_override != null,
-        income,
-        totalExpenses: expenses,
-        profit: income - expenses,
-      };
-    });
-  }, [q.data, months, year]);
+  const rows = useMemo(() => buildLedger(q.data, year), [q.data, year]);
 
   const totals = rows.reduce(
     (s, r) => ({
@@ -299,59 +166,8 @@ function PnlPage() {
               />
             </section>
 
-            <section className="overflow-x-auto rounded-xl border border-border bg-card">
-              <table className="w-full text-sm">
-                <caption className="p-3 text-start font-semibold">
-                  פריסה חודשית – שנת מס {year}
-                </caption>
-                <thead className="bg-muted/60">
-                  <tr>
-                    <th scope="col" className="p-2 text-start">חודש</th>
-                    <th scope="col" className="p-2 text-start">גבייה בפועל – פרויקטים</th>
-                    <th scope="col" className="p-2 text-start">צפי – פרויקטים</th>
-                    <th scope="col" className="p-2 text-start">הכנסות נוספות</th>
-                    <th scope="col" className="p-2 text-start">סה״כ הכנסות</th>
-                    <th scope="col" className="p-2 text-start">הוצאות</th>
-                    <th scope="col" className="p-2 text-start">רווח</th>
-                    <th scope="col" className="p-2 text-start no-print print:hidden">תיקון ידני</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r) => (
-                    <tr
-                      key={r.key}
-                      className={`border-t border-border ${r.key === currentKey ? "bg-accent/10 font-medium" : ""}`}
-                    >
-                      <td className="p-2">{r.label}</td>
-                      <td className="p-2">{fmtMoney(r.projectActual)}</td>
-                      <td className="p-2">{fmtMoney(r.projectForecast)}</td>
-                      <td className="p-2">{fmtMoney(r.otherActual + r.otherForecast)}</td>
-                      <td className="p-2 font-medium">
-                        {fmtMoney(r.income)}
-                        {r.overridden && <span className="ms-1 text-xs text-muted-foreground">(מתוקן)</span>}
-                      </td>
-                      <td className="p-2">{fmtMoney(r.totalExpenses)}</td>
-                      <td className={`p-2 font-semibold ${r.profit >= 0 ? "text-emerald-600" : "text-destructive"}`}>
-                        {fmtMoney(r.profit)}
-                      </td>
-                      <td className="p-2 no-print print:hidden">
-                        <AdjustDialog monthKeyValue={r.key} label={r.label} onSaved={invalidate} />
-                      </td>
-                    </tr>
-                  ))}
-                  <tr className="border-t-2 border-border bg-muted/40 font-semibold">
-                    <td className="p-2">סה״כ שנתי</td>
-                    <td className="p-2" colSpan={3} />
-                    <td className="p-2">{fmtMoney(totals.income)}</td>
-                    <td className="p-2">{fmtMoney(totals.expenses)}</td>
-                    <td className={`p-2 ${totals.profit >= 0 ? "text-emerald-600" : "text-destructive"}`}>
-                      {fmtMoney(totals.profit)}
-                    </td>
-                    <td className="p-2 no-print print:hidden" />
-                  </tr>
-                </tbody>
-              </table>
-            </section>
+            <PnlStatement rows={rows} expenses={q.data?.expenses ?? []} year={year}
+              adjustment={r => <AdjustDialog monthKeyValue={r.key} label={r.key} onSaved={invalidate} />} />
           </div>
         </TabsContent>
 
@@ -377,7 +193,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "go
       <p className="text-xs text-muted-foreground">{label}</p>
       <p
         className={`mt-1 text-xl font-bold ${
-          tone === "good" ? "text-emerald-600" : tone === "bad" ? "text-destructive" : ""
+          tone === "good" ? "text-success" : tone === "bad" ? "text-destructive" : ""
         }`}
       >
         {value}
@@ -463,6 +279,7 @@ function AdjustDialog({
 }
 
 function ExpensesTab({ expenses, onChanged }: { expenses: Expense[]; onChanged: () => void }) {
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({
     category: "general",
     description: "",
@@ -477,7 +294,9 @@ function ExpensesTab({ expenses, onChanged }: { expenses: Expense[]; onChanged: 
   const add = useMutation({
     mutationFn: async () => {
       if (!form.description.trim()) throw new Error("חסר תיאור");
-      const { error } = await supabase.from("expenses").insert({
+      if (!validDate(form.expense_date) || !Number.isFinite(Number(form.amount)) || !form.amount.trim() || Number(form.amount) === 0) throw new Error("יש להזין תאריך וסכום תקינים");
+      if (form.is_recurring && form.recurring_until && (!validDate(form.recurring_until) || form.recurring_until < form.expense_date)) throw new Error("תאריך סיום חייב להיות אחרי תאריך ההוצאה");
+      const payload = {
         category: form.category,
         description: form.description.trim(),
         vendor: form.vendor.trim() || null,
@@ -486,12 +305,14 @@ function ExpensesTab({ expenses, onChanged }: { expenses: Expense[]; onChanged: 
         is_recurring: form.is_recurring,
         recurring_until: form.is_recurring && form.recurring_until ? form.recurring_until : null,
         notes: form.notes.trim() || null,
-      });
+      };
+      const { error } = editingId ? await supabase.from("expenses").update(payload).eq("id", editingId) : await supabase.from("expenses").insert(payload);
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("ההוצאה נוספה");
-      setForm({ ...form, description: "", vendor: "", amount: "", notes: "" });
+      toast.success(editingId ? "ההוצאה עודכנה" : "ההוצאה נוספה");
+      setEditingId(null);
+      setForm({ category: "general", description: "", vendor: "", amount: "", expense_date: todayIso(), is_recurring: false, recurring_until: "", notes: "" });
       onChanged();
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "הוספת ההוצאה נכשלה"),
@@ -511,7 +332,11 @@ function ExpensesTab({ expenses, onChanged }: { expenses: Expense[]; onChanged: 
   return (
     <div className="space-y-6">
       <section className="rounded-xl border border-border bg-card p-5">
-        <h2 className="mb-4 font-semibold">הוספת הוצאה</h2>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="font-semibold">{editingId ? "עריכת הוצאה" : "הוספת הוצאה"}</h2>
+          <StatementImport expenses={expenses} onSaved={onChanged} />
+        </div>
+        <p className="mb-4 text-xs text-muted-foreground">סעיפים חשבונאיים מקובלים בישראל; הסיווג אינו קובע הכרה בהוצאה או זכאות לניכוי מע״מ.</p>
         <div className="grid gap-4 sm:grid-cols-3">
           <div className="space-y-2">
             <Label htmlFor="ex-cat">קטגוריה</Label>
@@ -550,7 +375,7 @@ function ExpensesTab({ expenses, onChanged }: { expenses: Expense[]; onChanged: 
               id="ex-amount"
               inputMode="decimal"
               value={form.amount}
-              onChange={(e) => setForm({ ...form, amount: e.target.value.replace(/[^\d.]/g, "") })}
+              onChange={(e) => setForm({ ...form, amount: e.target.value })}
             />
           </div>
           <div className="space-y-2">
@@ -592,8 +417,9 @@ function ExpensesTab({ expenses, onChanged }: { expenses: Expense[]; onChanged: 
         </div>
         <Button className="mt-4" onClick={() => add.mutate()} disabled={add.isPending}>
           <Plus className="size-4" />
-          הוספת הוצאה
+          {editingId ? "שמירת שינויים" : "הוספת הוצאה"}
         </Button>
+        {editingId && <Button className="ms-2 mt-4" variant="outline" onClick={() => { setEditingId(null); setForm({ category: "general", description: "", vendor: "", amount: "", expense_date: todayIso(), is_recurring: false, recurring_until: "", notes: "" }); }}>ביטול</Button>}
       </section>
 
       <section className="overflow-x-auto rounded-xl border border-border bg-card">
@@ -615,7 +441,10 @@ function ExpensesTab({ expenses, onChanged }: { expenses: Expense[]; onChanged: 
               <tr key={e.id} className="border-t border-border">
                 <td className="p-2">{e.expense_date}</td>
                 <td className="p-2">{catLabel(e.category)}</td>
-                <td className="p-2 font-medium">{e.description}</td>
+                <td className="p-2 font-medium"><Button variant="link" className="h-auto whitespace-normal p-0 text-start" onClick={() => {
+                  setEditingId(e.id); setForm({ category: e.category, description: e.description, vendor: e.vendor || "", amount: String(e.amount), expense_date: e.expense_date, is_recurring: e.is_recurring, recurring_until: e.recurring_until || "", notes: e.notes || "" });
+                  document.getElementById("ex-desc")?.scrollIntoView({ block: "center" });
+                }}>{e.description}</Button></td>
                 <td className="p-2">{e.vendor || "—"}</td>
                 <td className="p-2">{fmtMoney(Number(e.amount))}</td>
                 <td className="p-2">
@@ -628,7 +457,7 @@ function ExpensesTab({ expenses, onChanged }: { expenses: Expense[]; onChanged: 
                     size="icon"
                     variant="ghost"
                     aria-label={`מחיקת ההוצאה ${e.description}`}
-                    onClick={() => remove.mutate(e.id)}
+                    onClick={() => { if (window.confirm("למחוק את ההוצאה?")) remove.mutate(e.id); }}
                   >
                     <Trash2 className="size-4" />
                   </Button>
@@ -861,7 +690,7 @@ function IncomeCard({
                 <td className="p-2">{m.due_date || "—"}</td>
                 <td className="p-2">
                   {fmtMoney(collected)}
-                  {collected >= full - 0.5 && <span className="ms-1 text-emerald-600">· נגבה במלואו</span>}
+                  {collected >= full - 0.5 && <span className="ms-1 text-success">· נגבה במלואו</span>}
                 </td>
                 <td className="p-2">
                   <div className="flex gap-1">
