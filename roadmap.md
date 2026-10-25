@@ -1,4 +1,5 @@
 # Finance management extension
+- [ ] Support Excel XLS/XLSX alongside PDF statement scans; verify real scans and approval-only importing.
 - [x] Check every new statement against all stored expenses freshly, require per-row duplicate decisions, and verify before saving (23 tests passed; real PDF comparison, blocked undecided save and skip verified in administrator UI).
 - [x] Label approved scanned expenses automatic and directly entered expenses manual; verify existing records and editing preserve source.
 - [x] Show both suspected duplicate records and merge expenses with or without summation; verify persisted results.
