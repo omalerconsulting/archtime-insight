@@ -57,6 +57,13 @@
       "when": 1792906499386,
       "tag": "0007_income_vat_basis",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792906984420,
+      "tag": "0008_expense_duplicate_merge",
+      "breakpoints": true
     }
   ]
 }
