@@ -75,7 +75,8 @@ export function BulkPaidDateFix() {
       toast.success(`${changed.length} תאריכי תשלום עודכנו`);
       void qc.invalidateQueries({ queryKey: ["pnl"] });
       void qc.invalidateQueries({ queryKey: ["dashboard"] });
-      void qc.invalidateQueries({ queryKey: ["projects"] });
+      void qc.invalidateQueries({ queryKey: ["projects-full"] });
+      void qc.invalidateQueries({ queryKey: ["projects-dir"] });
       void qc.invalidateQueries({ queryKey: ["bulk-paid-date-fix"] });
     } catch {
       toast.error("העדכון נכשל — בדקו את הרשומות ונסו שוב");
