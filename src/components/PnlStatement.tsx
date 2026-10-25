@@ -38,7 +38,7 @@ export function PnlStatement({ rows, expenses, year, adjustment }: { rows: Ledge
       </table>
     </section>
     <Dialog open={!!detail} onOpenChange={v => { if (!v) setDetail(null); }}><DialogContent dir="rtl" className="max-h-[85dvh] w-[95vw] max-w-4xl overflow-y-auto" aria-describedby={undefined}>
-      <DialogTitle className="pe-8">{detail?.title}</DialogTitle>
+      <DialogTitle className="ps-8">{detail?.title}</DialogTitle>
       <div className="overflow-x-auto"><table className="w-full min-w-[600px] text-sm"><thead><tr>{["תאריך", "תיאור", "פרויקט / ספק", "סוג", "סכום"].map(h => <th className="p-2 text-start" key={h}>{h}</th>)}</tr></thead><tbody>{detail?.items.map(d => <tr key={d.id} className="border-t border-border"><td className="p-2">{d.date}</td><td className="p-2">{d.description}</td><td className="p-2">{d.party}</td><td className="p-2">{d.bucket === "expenses" ? `${catLabel(d.category || "general")}${d.recurring ? " · קבועה" : ""}` : d.bucket.endsWith("Forecast") ? "צפי" : "בפועל"}</td><td className="p-2">{fmtMoney(d.amount)}</td></tr>)}</tbody></table></div>
       {detail?.items.length === 0 && <p className="text-muted-foreground">אין רשומות מקור בסעיף זה.</p>}
       {!!detail?.delta && <p>התאמה ידנית: {fmtMoney(detail.delta)}{detail.note ? ` · ${detail.note}` : ""}</p>}
