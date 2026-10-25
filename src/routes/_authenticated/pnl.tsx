@@ -2,11 +2,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Plus, Printer, Trash2 } from "lucide-react";
+import { Plus, Printer, Trash2, Pencil } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminOnly } from "@/components/AdminOnly";
 import { PnlStatement } from "@/components/PnlStatement";
 import { StatementImport } from "@/components/StatementImport";
+import { IncomeVatFields } from "@/components/IncomeVatFields";
+import { incomeVat } from "@/lib/income-vat";
 import { ForecastCalculator } from "@/components/ForecastCalculator";
 import { EXPENSE_CATEGORIES, catLabel, buildLedger, forecastMonths, validDate, type Expense } from "@/lib/pnl-ledger";
 import { fmtMoney, MONTH_NAMES, milestoneAmount, todayIso, yearOptions } from "@/lib/time";
@@ -47,6 +49,8 @@ export const Route = createFileRoute("/_authenticated/pnl")({
 });
 
 type OtherIncome = {
+  vat_included: boolean;
+  vat_rate: number;
   id: string;
   source: string;
   client_name: string | null;
@@ -79,13 +83,13 @@ function PnlPage() {
     queryKey: ["pnl"],
     queryFn: async () => {
       const [projects, milestones, expenses, incomes, incomeMs, adj, comms, reviews] = await Promise.all([
-        supabase.from("projects").select("id, code, name, fee_total, status"),
+        supabase.from("projects").select("id, code, name, fee_total, status, vat_included, vat_rate"),
         supabase.from("project_milestones").select("*"),
         supabase.from("expenses").select("*").order("expense_date", { ascending: false }),
         supabase.from("other_incomes").select("*").order("created_at", { ascending: false }),
         supabase.from("other_income_milestones").select("*").order("sort_order"),
         supabase.from("pnl_adjustments").select("*"),
-        supabase.from("project_commissions").select("id, project_id, supplier_name, amount, expected_date, paid_amount, paid_date"),
+        supabase.from("project_commissions").select("id, project_id, supplier_name, amount, expected_date, paid_amount, paid_date, vat_included, vat_rate"),
         supabase.from("finance_duplicate_reviews").select("pair_key"),
       ]);
       for (const r of [projects, milestones, expenses, incomes, incomeMs, adj, comms, reviews]) {
@@ -104,7 +108,7 @@ function PnlPage() {
     },
   });
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["pnl"] });
+  const invalidate = () => { void qc.invalidateQueries({ queryKey: ["pnl"] }); void qc.invalidateQueries({ queryKey: ["dashboard"] }); };
 
   const rows = useMemo(() => buildLedger(q.data, year), [q.data, year]);
 
@@ -178,7 +182,7 @@ function PnlPage() {
               />
               <Stat label={`צפי חודש הבא · ${next?.key ?? ""}`} value={next ? fmtMoney(next.profit) : "—"} tone={(next?.profit ?? 0) >= 0 ? "good" : "bad"} />
             </section>
-            <p className="text-sm text-muted-foreground">{AUTHORITY_NOTE}</p>
+            <p className="text-sm text-muted-foreground">{AUTHORITY_NOTE}</p><p className="text-sm text-muted-foreground">ההכנסות והרווח בדוח לפני מע״מ; הגבייה בבנק מוצגת בנפרד כולל מע״מ. הכנסות קיימות נשארו בשיעור 0% עד בדיקת מנהל.</p>
 
             <PnlStatement rows={rows} expenses={q.data?.expenses ?? []} year={year}
               adjustment={r => <AdjustDialog monthKeyValue={r.key} label={r.key} onSaved={invalidate} />} />
@@ -327,8 +331,9 @@ function ExpensesTab({ expenses, onChanged, initialId }: { expenses: Expense[]; 
       };
       const suspected = findDuplicates([...expenses.filter(e=>e.id!==editingId), { ...payload, id: editingId || "draft" }], []);
       if (suspected.some(p=>p.firstId===(editingId || "draft") || p.secondId===(editingId || "draft")) && !window.confirm("חשד לכפילות בהוצאה. לשמור בכל זאת ולהעביר לבדיקת כפילויות?")) throw new Error("השמירה בוטלה; ניתן לתקן את ההוצאה");
-      const { error } = editingId ? await supabase.from("expenses").update(payload).eq("id", editingId) : await supabase.from("expenses").insert(payload);
-      if (error) throw error;
+      const result = editingId ? await supabase.from("expenses").update(payload).eq("id", editingId).select("id").single() : await supabase.from("expenses").insert(payload).select("id").single();
+      if (result.error) throw new Error(result.error.message);
+      if (!result.data) throw new Error("ההוצאה לא נשמרה; יש לבדוק הרשאת מנהל");
     },
     onSuccess: () => {
       toast.success(editingId ? "ההוצאה עודכנה" : "ההוצאה נוספה");
@@ -352,6 +357,11 @@ function ExpensesTab({ expenses, onChanged, initialId }: { expenses: Expense[]; 
     },
     onError: () => toast.error("המחיקה נכשלה"),
   });
+
+  const editExpense = (e: Expense) => {
+    setEditingId(e.id); setForm({ category: e.category, description: e.description, vendor: e.vendor || "", amount: String(e.amount), expense_date: e.expense_date, is_recurring: e.is_recurring, recurring_until: e.recurring_until || "", notes: e.notes || "" });
+    requestAnimationFrame(() => { const input = document.getElementById("ex-desc"); input?.scrollIntoView({ block: "center" }); input?.focus({ preventScroll: true }); });
+  };
 
   return (
     <div className="space-y-6">
@@ -465,10 +475,7 @@ function ExpensesTab({ expenses, onChanged, initialId }: { expenses: Expense[]; 
                 <td className="p-2"><Checkbox aria-label={`סימון הוצאה ${e.description}`} checked={selected.includes(e.id)} onCheckedChange={v=>setSelected(v ? [...selected,e.id] : selected.filter(id=>id!==e.id))} /></td>
                 <td className="p-2">{e.expense_date}</td>
                 <td className="p-2">{catLabel(e.category)}</td>
-                <td className="p-2 font-medium"><Button variant="link" className="h-auto whitespace-normal p-0 text-start" onClick={() => {
-                  setEditingId(e.id); setForm({ category: e.category, description: e.description, vendor: e.vendor || "", amount: String(e.amount), expense_date: e.expense_date, is_recurring: e.is_recurring, recurring_until: e.recurring_until || "", notes: e.notes || "" });
-                  document.getElementById("ex-desc")?.scrollIntoView({ block: "center" });
-                }}>{e.description}</Button></td>
+                <td className="p-2 font-medium"><Button variant="link" className="h-auto whitespace-normal p-0 text-start" onClick={() => editExpense(e)}}>{e.description}</Button></td>
                 <td className="p-2">{e.vendor || "—"}</td>
                 <td className="p-2">{fmtMoney(Number(e.amount))}</td>
                 <td className="p-2">
@@ -477,6 +484,7 @@ function ExpensesTab({ expenses, onChanged, initialId }: { expenses: Expense[]; 
                     : "חד פעמית"}
                 </td>
                 <td className="p-2">
+                  <Button size="icon" variant="ghost" title="עריכת הוצאה" aria-label={`עריכת ההוצאה ${e.description}`} onClick={() => editExpense(e)}><Pencil className="size-4" /></Button>
                   <Button
                     size="icon"
                     variant="ghost"
@@ -516,7 +524,7 @@ function IncomesTab({
   const initial = incomes.find(i=>i.id===initialId);
   const [editingId, setEditingId] = useState<string | null>(initial?.id ?? null);
   const [selected, setSelected] = useState<string[]>([]);
-  const [form, setForm] = useState(initial ? {source:initial.source,client_name:initial.client_name || "",total_amount:String(initial.total_amount),notes:initial.notes || ""} : { source: "", client_name: "", total_amount: "", notes: "" });
+  const [form, setForm] = useState(initial ? {source:initial.source,client_name:initial.client_name || "",total_amount:String(initial.total_amount),vat_included:initial.vat_included,vat_rate:String(initial.vat_rate),notes:initial.notes || ""} : { source: "", client_name: "", total_amount: "", vat_included: false, vat_rate: "18", notes: "" });
 
   const add = useMutation({
     mutationFn: async () => {
@@ -525,8 +533,11 @@ function IncomesTab({
         source: form.source.trim(),
         client_name: form.client_name.trim() || null,
         total_amount: Number(form.total_amount) || 0,
+        vat_included: form.vat_included,
+        vat_rate: Number(form.vat_rate),
         notes: form.notes.trim() || null,
       };
+      if (!form.vat_rate.trim() || !Number.isFinite(payload.vat_rate) || payload.vat_rate < 0 || payload.vat_rate > 100) throw new Error("יש להזין שיעור מע״מ בין 0 ל־100");
       if (!Number.isFinite(payload.total_amount) || payload.total_amount <= 0) throw new Error("יש להזין סכום חיובי תקין");
       const suspected = findDuplicates([], [...incomes.filter(i=>i.id!==editingId),{...payload,id:editingId || "draft"}]);
       if (suspected.some(p=>p.firstId===(editingId || "draft") || p.secondId===(editingId || "draft")) && !window.confirm("חשד לכפילות בהכנסה. לשמור בכל זאת ולהעביר לבדיקת כפילויות?")) throw new Error("השמירה בוטלה; ניתן לתקן את ההכנסה");
@@ -536,7 +547,7 @@ function IncomesTab({
     onSuccess: () => {
       toast.success(editingId ? "ההכנסה עודכנה" : "ההכנסה נוספה");
       setEditingId(null);
-      setForm({ source: "", client_name: "", total_amount: "", notes: "" });
+      setForm({ source: "", client_name: "", total_amount: "", vat_included: false, vat_rate: "18", notes: "" });
       onChanged();
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "ההוספה נכשלה"),
@@ -561,7 +572,7 @@ function IncomesTab({
       <section className="rounded-xl border border-border bg-card p-5">
         <h2 className="mb-1 font-semibold">{editingId ? "עריכת הכנסה" : "הוספת הכנסה שאינה מפרויקט"}</h2>
         <p className="mb-4 text-sm text-muted-foreground">
-          לדוגמה: עמלות ספקים, ייעוץ חיצוני, השכרת ציוד. ההכנסות נספרות במלואן ב‑P&amp;L של המשרד.
+          לדוגמה: עמלות ספקים, ייעוץ חיצוני, השכרת ציוד. ההכנסות בדוח מוצגות לפני מע״מ; הגבייה בבנק כולל מע״מ. תחנות התשלום והסכומים שנגבו נרשמים לפי בסיס הסכום שנבחר.
         </p>
         <div className="grid gap-4 sm:grid-cols-4">
           <div className="space-y-2">
@@ -581,7 +592,7 @@ function IncomesTab({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="oi-amount">סכום כולל (₪)</Label>
+            <Label htmlFor="oi-amount">סכום הכנסה (₪)</Label>
             <Input
               id="oi-amount"
               inputMode="decimal"
@@ -589,6 +600,7 @@ function IncomesTab({
               onChange={(e) => setForm({ ...form, total_amount: e.target.value.replace(/[^\d.]/g, "") })}
             />
           </div>
+          <IncomeVatFields id="oi-vat" amount={Number(form.total_amount)} included={form.vat_included} rate={form.vat_rate} onChange={(included,rate)=>setForm({...form,vat_included:included,vat_rate:rate})} />
           <div className="space-y-2">
             <Label htmlFor="oi-notes">הערות</Label>
             <Input
@@ -602,7 +614,7 @@ function IncomesTab({
           <Plus className="size-4" />
           {editingId ? "שמירת שינויים" : "הוספת הכנסה"}
         </Button>
-        {editingId && <Button className="ms-2" variant="outline" onClick={()=>{setEditingId(null);setForm({source:"",client_name:"",total_amount:"",notes:""});}}>ביטול</Button>}
+        {editingId && <Button className="ms-2" variant="outline" onClick={()=>{setEditingId(null);setForm({source:"",client_name:"",total_amount:"",vat_included:false,vat_rate:"18",notes:""});}}>ביטול</Button>}
       </section>
 
       <BulkFinanceActions ids={incomes.map(i=>i.id)} selected={selected} onSelect={setSelected} onDelete={ids=>remove.mutate(ids)} busy={remove.isPending} label="הכנסות" />
@@ -614,7 +626,7 @@ function IncomesTab({
           onChanged={onChanged}
           selected={selected.includes(inc.id)}
           onSelect={v=>setSelected(v ? [...selected,inc.id] : selected.filter(id=>id!==inc.id))}
-          onEdit={()=>{setEditingId(inc.id);setForm({source:inc.source,client_name:inc.client_name || "",total_amount:String(inc.total_amount),notes:inc.notes || ""});document.getElementById("oi-src")?.scrollIntoView({block:"center"});}}
+          onEdit={()=>{setEditingId(inc.id);setForm({source:inc.source,client_name:inc.client_name || "",total_amount:String(inc.total_amount),vat_included:inc.vat_included,vat_rate:String(inc.vat_rate),notes:inc.notes || ""});document.getElementById("oi-src")?.scrollIntoView({block:"center"});}}
           onRemove={() => {if(window.confirm("למחוק את ההכנסה וכל תחנות התשלום שלה?")) remove.mutate([inc.id]);}}
         />
       ))}
@@ -713,6 +725,7 @@ function IncomeCard({
         </Button>
       </div>
 
+      <p className="mb-3 text-sm text-muted-foreground">{income.vat_included ? "סכומים כוללים מע״מ" : "סכומים לפני מע״מ"} · {income.vat_rate}% · לדוח: {fmtMoney(incomeVat(Number(income.total_amount), income).net)} · לבנק: {fmtMoney(incomeVat(Number(income.total_amount), income).gross)} · נגבה בבנק: {fmtMoney(incomeVat(collectedTotal, income).gross)}</p>
       <table className="w-full text-sm">
         <caption className="sr-only">תחנות תשלום להכנסה</caption>
         <thead className="bg-muted/60">

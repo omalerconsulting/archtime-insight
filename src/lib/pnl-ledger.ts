@@ -1,3 +1,4 @@
+import { incomeVat, type VatBasis } from "./income-vat";
 export const EXPENSE_CATEGORIES = [
   { value: "salaries", label: "שכר עבודה" },
   { value: "payroll_costs", label: "נלוות שכר והפרשות מעסיק" },
@@ -21,13 +22,13 @@ export const EXPENSE_CATEGORIES = [
 export const catLabel = (v: string) => EXPENSE_CATEGORIES.find(c => c.value === v)?.label ?? v;
 export type Expense = { id: string; category: string; description: string; vendor: string | null; amount: number; expense_date: string; is_recurring: boolean; recurring_until: string | null; notes: string | null; import_key?: string | null };
 export type Bucket = "projectActual" | "projectForecast" | "otherActual" | "otherForecast" | "expenses";
-export type LedgerDetail = { id: string; bucket: Bucket; date: string; description: string; party: string; amount: number; category?: string; expenseId?: string; recurring?: boolean };
+export type LedgerDetail = { id: string; bucket: Bucket; date: string; description: string; party: string; amount: number; gross?: number; vat?: number; category?: string; expenseId?: string; recurring?: boolean };
 type Milestone = { id: string; title: string; amount_type: string; amount_value: number; status: string; paid_amount: number; paid_date: string | null; due_date: string | null };
 export type LedgerData = {
-  projects: { id: string; code: string; name: string; fee_total: number }[];
+  projects: ({ id: string; code: string; name: string; fee_total: number } & VatBasis)[];
   milestones: (Milestone & { project_id: string })[];
-  commissions: { id: string; project_id: string; supplier_name: string; amount: number; paid_amount: number; paid_date: string | null; expected_date: string | null }[];
-  incomes: { id: string; source: string; total_amount: number }[];
+  commissions: ({ id: string; project_id: string; supplier_name: string; amount: number; paid_amount: number; paid_date: string | null; expected_date: string | null } & VatBasis)[];
+  incomes: ({ id: string; source: string; total_amount: number } & VatBasis)[];
   incomeMs: (Milestone & { income_id: string })[];
   expenses: Expense[];
   adjustments: { month: string; income_override: number | null; expense_override: number | null; note: string | null }[];
@@ -58,26 +59,28 @@ export function buildLedger(data: LedgerData | undefined, year: number) {
     row.details.push(detail);
   };
   if (data) {
-    const payment = (m: Milestone, total: number, label: string, actual: Bucket, forecast: Bucket) => {
+    const payment = (m: Milestone, total: number, label: string, actual: Bucket, forecast: Bucket, basis: VatBasis) => {
       const full = m.amount_type === "percent" ? Number(total) * Number(m.amount_value) / 100 : Number(m.amount_value);
       const paid = m.status === "paid" ? full : Math.min(Number(m.paid_amount) || 0, full);
-      add({ id: `${m.id}-paid`, bucket: actual, date: m.paid_date || m.due_date || "", description: m.title, party: label, amount: paid });
-      add({ id: `${m.id}-forecast`, bucket: forecast, date: m.due_date || "", description: m.title, party: label, amount: Math.max(0, full - paid) });
+      const actualVat = incomeVat(paid, basis), forecastVat = incomeVat(Math.max(0, full - paid), basis);
+      add({ id: `${m.id}-paid`, bucket: actual, date: m.paid_date || m.due_date || "", description: m.title, party: label, amount: actualVat.net, gross: actualVat.gross, vat: actualVat.vat });
+      add({ id: `${m.id}-forecast`, bucket: forecast, date: m.due_date || "", description: m.title, party: label, amount: forecastVat.net, gross: forecastVat.gross, vat: forecastVat.vat });
     };
     data.milestones.forEach(m => {
       const p = data.projects.find(p => p.id === m.project_id);
-      if (p) payment(m, p.fee_total, `${p.code} · ${p.name}`, "projectActual", "projectForecast");
+      if (p) payment(m, p.fee_total, `${p.code} · ${p.name}`, "projectActual", "projectForecast", p);
     });
     data.incomeMs.forEach(m => {
       const inc = data.incomes.find(i => i.id === m.income_id);
-      if (inc) payment(m, inc.total_amount, inc.source, "otherActual", "otherForecast");
+      if (inc) payment(m, inc.total_amount, inc.source, "otherActual", "otherForecast", inc);
     });
     data.commissions.forEach(c => {
       const p = data.projects.find(p => p.id === c.project_id);
       const paid = Math.min(Number(c.paid_amount) || 0, Number(c.amount));
       const detail = { description: `עמלת ספק · ${c.supplier_name}`, party: p ? `${p.code} · ${p.name}` : "פרויקט", amount: paid };
-      add({ ...detail, id: `${c.id}-paid`, bucket: "projectActual", date: c.paid_date || c.expected_date || "" });
-      add({ ...detail, id: `${c.id}-forecast`, bucket: "projectForecast", date: c.expected_date || "", amount: Math.max(0, Number(c.amount) - paid) });
+      const actualVat = incomeVat(paid, c), forecastVat = incomeVat(Math.max(0, Number(c.amount) - paid), c);
+      add({ ...detail, amount: actualVat.net, gross: actualVat.gross, vat: actualVat.vat, id: `${c.id}-paid`, bucket: "projectActual", date: c.paid_date || c.expected_date || "" });
+      add({ ...detail, id: `${c.id}-forecast`, bucket: "projectForecast", date: c.expected_date || "", amount: forecastVat.net, gross: forecastVat.gross, vat: forecastVat.vat });
     });
     data.expenses.forEach(e => rows.forEach(r => {
       if (expenseOccurs(e, r.key)) add({ id: `${e.id}-${r.key}`, bucket: "expenses", date: e.is_recurring ? monthlyExpenseDate(e.expense_date, r.key) : e.expense_date, description: e.description, party: e.vendor || "—", amount: Number(e.amount), category: e.category, expenseId: e.id, recurring: e.is_recurring });
@@ -88,7 +91,10 @@ export function buildLedger(data: LedgerData | undefined, year: number) {
     const sourceIncome = r.projectActual + r.projectForecast + r.otherActual + r.otherForecast;
     const income = a?.income_override != null ? Number(a.income_override) : sourceIncome;
     const totalExpenses = a?.expense_override != null ? Number(a.expense_override) : r.expenses;
-    return { ...r, sourceIncome, income, totalExpenses, profit: income - totalExpenses, incomeDelta: income - sourceIncome, expenseDelta: totalExpenses - r.expenses, note: a?.note ?? "", overridden: a?.income_override != null || a?.expense_override != null };
+    const incomeVatTotal = r.details.filter(d => d.bucket !== "expenses").reduce((s,d) => s + (d.vat ?? 0), 0);
+    const bankActual = r.details.filter(d => d.bucket === "projectActual" || d.bucket === "otherActual").reduce((s,d) => s + (d.gross ?? d.amount), 0);
+    const bankForecast = r.details.filter(d => d.bucket === "projectForecast" || d.bucket === "otherForecast").reduce((s,d) => s + (d.gross ?? d.amount), 0);
+    return { ...r, sourceIncome, income, incomeVatTotal, bankActual, bankForecast, totalExpenses, profit: income - totalExpenses, incomeDelta: income - sourceIncome, expenseDelta: totalExpenses - r.expenses, note: a?.note ?? "", overridden: a?.income_override != null || a?.expense_override != null };
   });
 }
 export type LedgerMonth = ReturnType<typeof buildLedger>[number];
