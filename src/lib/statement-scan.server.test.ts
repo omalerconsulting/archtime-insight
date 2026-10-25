@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createOpenAI } from "@ai-sdk/openai";
 
 const mocks = vi.hoisted(() => ({ fetch: vi.fn(), header: vi.fn() }));
 vi.mock("@tanstack/react-start/server", () => ({ getRequest: () => new Request("http://localhost:8080"), setResponseHeader: mocks.header }));
