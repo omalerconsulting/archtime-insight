@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { AdminOnly } from "@/components/AdminOnly";
 import { PnlStatement } from "@/components/PnlStatement";
 import { StatementImport } from "@/components/StatementImport";
+import { ForecastCalculator } from "@/components/ForecastCalculator";
 import { EXPENSE_CATEGORIES, catLabel, buildLedger, forecastMonths, validDate, type Expense } from "@/lib/pnl-ledger";
 import { fmtMoney, MONTH_NAMES, milestoneAmount, todayIso, yearOptions } from "@/lib/time";
 import { Button } from "@/components/ui/button";
@@ -154,6 +155,7 @@ function PnlPage() {
           <TabsTrigger value="summary">תחזית שנתית</TabsTrigger>
           <TabsTrigger value="expenses">הוצאות</TabsTrigger>
           <TabsTrigger value="incomes">הכנסות נוספות</TabsTrigger>
+          <TabsTrigger value="calculator">מחשבון תחזיות</TabsTrigger>
         </TabsList>
 
         <TabsContent value="summary" className="mt-4 space-y-6">
@@ -196,6 +198,7 @@ function PnlPage() {
             onChanged={invalidate}
           />
         </TabsContent>
+        <TabsContent value="calculator" className="mt-4"><ForecastCalculator data={q.data} /></TabsContent>
       </Tabs>
     </div>
   );
