@@ -1,0 +1,39 @@
+import { useMemo, useState } from "react";
+import { Calculator } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { calculateForecast } from "@/lib/forecast-calculator";
+import { buildLedger, catLabel, type LedgerData } from "@/lib/pnl-ledger";
+import { fmtMoney, todayIso } from "@/lib/time";
+
+export function ForecastCalculator({ data }: { data: LedgerData | undefined }) {
+  const [month,setMonth]=useState(todayIso().slice(0,7));
+  const [scenario,setScenario]=useState<"company" | "dividend">("company");
+  const [form,setForm]=useState({target:"",corporateRate:"",dividendRate:"",vatRate:"",advanceRate:"",inputVat:"0",nonDeductible:"0",additionalExpenses:"0",averageDeal:"",installmentPercent:"100"});
+  const row=useMemo(()=>buildLedger(data,Number(month.slice(0,4))).find(r=>r.key===month),[data,month]);
+  const expenses=row?.totalExpenses ?? 0;
+  const groups=new Map<string,number>();
+  row?.details.filter(d=>d.bucket==="expenses").forEach(d=>groups.set(d.category || "general",(groups.get(d.category || "general") || 0)+d.amount));
+  let result: ReturnType<typeof calculateForecast> | null=null,error="";
+  const ready=Object.values(form).every(v=>v.trim()!=="") && !!data && !!row;
+  if(ready) try { result=calculateForecast({...Object.fromEntries(Object.entries(form).map(([k,v])=>[k,Number(v)])),target:Number(form.target),expenses:expenses+Number(form.additionalExpenses),nonDeductible:Number(form.nonDeductible),corporateRate:Number(form.corporateRate),dividendRate:Number(form.dividendRate),vatRate:Number(form.vatRate),advanceRate:Number(form.advanceRate),inputVat:Number(form.inputVat),averageDeal:Number(form.averageDeal),installmentPercent:Number(form.installmentPercent),plannedRevenue:row?.income ?? 0,scenario}); } catch(e){error=e instanceof Error ? e.message : "נתונים לא תקינים";}
+  const fields: {key:keyof typeof form;label:string;percent?:boolean}[]=[{key:"target",label:"יעד רווח חודשי (₪)"},{key:"corporateRate",label:"מס חברות משוער (%)",percent:true},{key:"dividendRate",label:"מס דיבידנד כולל תוספות לפי רו״ח (%)",percent:true},{key:"vatRate",label:"מע״מ על ההכנסות (%)",percent:true},{key:"advanceRate",label:"מקדמות מס מהמחזור (%)",percent:true},{key:"inputVat",label:"מע״מ תשומות מותר לקיזוז (₪)"},{key:"nonDeductible",label:"מתוך ההוצאות: לא מוכרות למס (₪)"},{key:"additionalExpenses",label:"הוצאות נוספות צפויות לפני מע״מ (₪)"},{key:"averageDeal",label:"שווי עסקה ממוצעת לפני מע״מ (₪)"},{key:"installmentPercent",label:"חלק מהעסקה שייגבה בחודש (%)",percent:true}];
+  return <div className="space-y-6">
+    <header><h2 className="flex items-center gap-2 text-xl font-semibold"><Calculator className="size-5" />מחשבון תחזיות</h2><p className="mt-2 text-sm text-muted-foreground">חברה בע״מ · אומדן תכנוני בלבד, לא שומת מס. שיעורי המס והמקדמות לפי נתוני רואה החשבון.</p></header>
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="space-y-2"><Label htmlFor="fc-month">חודש לתכנון</Label><Input id="fc-month" type="month" value={month} onChange={e=>setMonth(e.target.value)} /></div>
+      <div className="space-y-2"><Label htmlFor="fc-scenario">יעד הרווח מתייחס ל־</Label><Select value={scenario} onValueChange={v=>setScenario(v==="dividend" ? "dividend" : "company")}><SelectTrigger id="fc-scenario"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="company">רווח שנשאר בחברה</SelectItem><SelectItem value="dividend">נטו לאחר חלוקת כל היתרה</SelectItem></SelectContent></Select></div>
+      {fields.map(f=><div className="space-y-2" key={f.key}><Label htmlFor={`fc-${f.key}`}>{f.label}</Label><Input id={`fc-${f.key}`} type="number" min="0" max={f.percent ? 100 : undefined} step="0.01" value={form[f.key]} onChange={e=>setForm({...form,[f.key]:e.target.value})} /></div>)}
+    </div>
+    <p className="border-s-4 border-warning bg-warning/10 p-3 text-sm">כל ההכנסות וההוצאות בתכנון חייבות להיות לפני מע״מ. הוצאות הרשומות כיום נאספות כפי שהוזנו; אם הן כוללות מע״מ יש לתקן את בסיס הסכומים. מע״מ תשומות אינו מחושב אוטומטית מכל הוצאה.</p>
+    <section className="space-y-2 border-y border-border py-4"><h3 className="font-semibold">הוצאות צפויות לפי סעיפי רואה חשבון · {month}</h3><div className="grid gap-x-8 sm:grid-cols-2">{Array.from(groups).map(([cat,amount])=><div key={cat} className="flex justify-between gap-4 border-b border-border py-2 text-sm"><span>{catLabel(cat)}</span><span>{fmtMoney(amount)}</span></div>)}{row?.expenseDelta !== 0 && <div className="flex justify-between py-2 text-sm"><span>התאמה ידנית</span><span>{fmtMoney(row?.expenseDelta ?? 0)}</span></div>}<div className="flex justify-between py-2 text-sm"><span>הוצאות נוספות בתרחיש</span><span>{fmtMoney(Number(form.additionalExpenses)||0)}</span></div></div><p className="font-semibold">סה״כ הוצאות צפויות: {fmtMoney(expenses+(Number(form.additionalExpenses)||0))}</p></section>
+    {!ready && <p className="text-muted-foreground">יש להשלים יעד, שיעורי רשויות ושווי עסקה כדי לחשב. שיעור 0 מציין שאין חיוב בהנחה זו.</p>}
+    {error && <p role="alert" className="text-destructive">{error}</p>}
+    {result && <>
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{[["הכנסות נדרשות לפני מע״מ",result.requiredRevenue],["רווח שנשאר בחברה",result.retained],["מס דיבידנד על כל היתרה",result.dividendTax],["נטו לאחר דיבידנד",result.netDividend]].map(([label,value])=><div key={String(label)} className="border-s-2 border-primary ps-4"><p className="text-sm text-muted-foreground">{label}</p><p className="mt-1 text-xl font-bold">{fmtMoney(Number(value))}</p></div>)}</section>
+      <section className="space-y-3 border-y border-border py-4"><h3 className="font-semibold">תשלומי רשויות משוערים</h3><dl className="grid gap-3 text-sm sm:grid-cols-2">{[["מס חברות על הרווח החייב (הפרשה)",result.corporateTax],["מע״מ עסקאות",result.outputVat],["מע״מ לתשלום לאחר קיזוז תשומות",result.vatPayment],["יתרת תשומות לקיזוז",result.vatCredit],["מקדמות מס לפי המחזור",result.advance],["רשויות לתשלום בתזרים: מע״מ ומקדמות",result.authorityCash],["רשויות לפי חבות: מע״מ ומס חברות",result.taxProvision],["חבות חברות פחות מקדמות (יתרה/עודף)",result.corporateBalance]].map(([label,value])=><div key={String(label)} className="flex justify-between gap-4"><dt>{label}</dt><dd className="font-medium">{fmtMoney(Number(value))}</dd></div>)}</dl><p className="text-xs text-muted-foreground">מקדמות הן על חשבון מס החברות ולא הוצאה נוספת. מע״מ אינו מנוכה שוב מהרווח המחושב לפני מע״מ. מס הדיבידנד נוסף רק בתרחיש חלוקה; מועד תשלום בפועל תלוי במחזור הדיווח. מס יסף והבדלים שנתיים נכללים רק אם הזנת אותם בשיעור המתאים.</p></section>
+      <section className="space-y-3"><h3 className="font-semibold">יעד עסקאות ופריסת תשלומים</h3><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{[["הכנסות שכבר מתוכננות לחודש",row?.income ?? 0],["פער הכנסות להשלמה",result.gap],["שווי חוזים נוספים נדרש",result.newContractValue],["גבייה חודשית לעסקה ממוצעת",result.monthlyDeal]].map(([label,value])=><div key={String(label)}><p className="text-sm text-muted-foreground">{label}</p><p className="text-lg font-semibold">{fmtMoney(Number(value))}</p></div>)}</div><p className="text-lg font-semibold">{result.deals} עסקאות חדשות בשווי {fmtMoney(Number(form.averageDeal))} לעסקה, בגבייה של {form.installmentPercent}% בחודש.</p><p className="text-sm text-muted-foreground">גבייה כוללת נדרשת מלקוחות כולל מע״מ: {fmtMoney(result.customerGross)}. תכנון בלבד — אינו משנה עסקאות או תנאי תשלום קיימים.</p></section>
+    </>}
+  </div>;
+}

@@ -16,3 +16,4 @@
 - Finance duplicate approvals persist as administrator-only row-pair fingerprints including matching fields; changed transactions require fresh review, and suspected duplicates remain in the ledger until corrected or deleted.
 - Full P&L printing uses an isolated document built from the shared ledger, so every month, item and manual adjustment prints regardless of the active tab.
 - Fixed expenses are virtual monthly ledger entries rather than repeated database inserts; clamp their dates to the actual month end.
+- The company forecast calculator is a pure reverse-profit model using administrator-entered accountant assumptions; keep VAT cash flows and tax advances separate from corporate-tax expense, and never double-subtract them from profit.
