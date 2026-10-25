@@ -25,7 +25,20 @@ export async function extractStatementExcel(bytes: ArrayBuffer): Promise<string>
   for (const name of workbook.SheetNames) {
     const sheet = workbook.Sheets[name];
     if (!sheet) continue;
-    const content = XLSX.utils.sheet_to_csv(sheet, { FS: "\t", RS: "\n", blankrows: false, dateNF: "yyyy-mm-dd" });
+    // Ignore formatting-only outer ranges, but retain every actual value (including hidden cells).
+    let firstRow = Infinity, firstCol = Infinity, lastRow = -1, lastCol = -1;
+    for (const address of Object.keys(sheet)) {
+      if (address.startsWith("!")) continue;
+      const cell = sheet[address];
+      if (!cell || cell.v === undefined || cell.v === null || cell.v === "") continue;
+      const position = XLSX.utils.decode_cell(address);
+      firstRow = Math.min(firstRow, position.r); firstCol = Math.min(firstCol, position.c);
+      lastRow = Math.max(lastRow, position.r); lastCol = Math.max(lastCol, position.c);
+    }
+    if (lastRow < 0) continue;
+    // SheetJS 0.18's CSV exporter reads !ref rather than an options.range; use an immutable view.
+    const populatedSheet = { ...sheet, "!ref": XLSX.utils.encode_range({ s: { r: firstRow, c: firstCol }, e: { r: lastRow, c: lastCol } }) };
+    const content = XLSX.utils.sheet_to_csv(populatedSheet, { FS: "\t", RS: "\n", blankrows: false, dateNF: "yyyy-mm-dd", strip: true });
     if (!content.replace(/[\s\t]/g, "")) continue;
     const section = `גיליון: ${name}\n${content}`;
     length += section.length + 2;
