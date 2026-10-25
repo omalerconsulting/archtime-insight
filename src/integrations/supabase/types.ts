@@ -51,6 +51,7 @@ export type Database = {
           id: string
           import_key: string | null
           is_recurring: boolean
+          merged_into: string | null
           notes: string | null
           recurring_until: string | null
           updated_at: string
@@ -66,6 +67,7 @@ export type Database = {
           id?: string
           import_key?: string | null
           is_recurring?: boolean
+          merged_into?: string | null
           notes?: string | null
           recurring_until?: string | null
           updated_at?: string
@@ -81,12 +83,21 @@ export type Database = {
           id?: string
           import_key?: string | null
           is_recurring?: boolean
+          merged_into?: string | null
           notes?: string | null
           recurring_until?: string | null
           updated_at?: string
           vendor?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "expenses_merged_into_fkey"
+            columns: ["merged_into"]
+            isOneToOne: false
+            referencedRelation: "expenses"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       finance_duplicate_reviews: {
         Row: {
@@ -664,6 +675,16 @@ export type Database = {
           name: string
           status: string
         }[]
+      }
+      merge_duplicate_expenses: {
+        Args: {
+          p_expected_keep: Json
+          p_expected_remove: Json
+          p_keep_id: string
+          p_remove_id: string
+          p_sum: boolean
+        }
+        Returns: string
       }
       month_editable: { Args: { _work_date: string }; Returns: boolean }
       period_open: { Args: { _work_date: string }; Returns: boolean }

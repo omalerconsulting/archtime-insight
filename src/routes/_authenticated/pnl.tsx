@@ -85,7 +85,7 @@ function PnlPage() {
       const [projects, milestones, expenses, incomes, incomeMs, adj, comms, reviews] = await Promise.all([
         supabase.from("projects").select("id, code, name, fee_total, status, vat_included, vat_rate"),
         supabase.from("project_milestones").select("*"),
-        supabase.from("expenses").select("*").order("expense_date", { ascending: false }),
+        supabase.from("expenses").select("*").is("merged_into", null).order("expense_date", { ascending: false }),
         supabase.from("other_incomes").select("*").order("created_at", { ascending: false }),
         supabase.from("other_income_milestones").select("*").order("sort_order"),
         supabase.from("pnl_adjustments").select("*"),
@@ -153,7 +153,7 @@ function PnlPage() {
       </div>
 
       {q.isError && <p role="alert" className="text-destructive">טעינת הנתונים נכשלה. <Button variant="link" onClick={()=>void q.refetch()}>ניסיון נוסף</Button></p>}
-      <FinanceDuplicates pairs={duplicatePairs} approved={q.data?.reviews ?? []} onChanged={invalidate} onEdit={(kind,id)=>{ setEditTarget({kind,id}); setTab(kind === "expense" ? "expenses" : "incomes"); }} />
+      <FinanceDuplicates pairs={duplicatePairs} expenses={q.data?.expenses ?? []} incomes={q.data?.incomes ?? []} approved={q.data?.reviews ?? []} onChanged={invalidate} onEdit={(kind,id)=>{ setEditTarget({kind,id}); setTab(kind === "expense" ? "expenses" : "incomes"); }} />
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="no-print h-auto max-w-full flex-wrap print:hidden">
           <TabsTrigger value="summary">תחזית שנתית</TabsTrigger>
