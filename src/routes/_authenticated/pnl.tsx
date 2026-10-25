@@ -315,6 +315,25 @@ function ExpensesTab({ expenses, onChanged, initialId }: { expenses: Expense[]; 
     notes: "",
   });
 
+  const [catFilter, setCatFilter] = useState("all");
+  const [amountFilter, setAmountFilter] = useState("all"); // all | high | low
+  const [amountThreshold, setAmountThreshold] = useState("");
+  const filtered = useMemo(
+    () =>
+      expenses.filter((e) => {
+        if (catFilter !== "all" && e.category !== catFilter) return false;
+        if (amountFilter !== "all" && amountThreshold.trim() !== "") {
+          const t = Number(amountThreshold);
+          if (Number.isFinite(t) && (amountFilter === "high" ? Number(e.amount) <= t : Number(e.amount) >= t)) return false;
+        }
+        return true;
+      }),
+    [expenses, catFilter, amountFilter, amountThreshold],
+  );
+  const filteredSum = filtered.reduce((s, e) => s + Number(e.amount), 0);
+  const filtersActive = catFilter !== "all" || (amountFilter !== "all" && amountThreshold.trim() !== "");
+  const clearFilters = () => { setCatFilter("all"); setAmountFilter("all"); setAmountThreshold(""); };
+
   const add = useMutation({
     mutationFn: async () => {
       if (!form.description.trim()) throw new Error("חסר תיאור");
