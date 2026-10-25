@@ -1,10 +1,28 @@
 import { describe, expect, it } from "vitest";
-import { checkScanDuplicates, scanNeedsDecision, type ScanExpense, type StoredScanExpense } from "./statement-duplicates";
+import { approveSelectedScanDuplicates, DEFAULT_SCAN_DUPLICATE_DECISION, checkScanDuplicates, scanNeedsDecision, type ScanExpense, type StoredScanExpense } from "./statement-duplicates";
 
 const scanned: ScanExpense = { importKey: "second:0", description: "שירות תוכנה", vendor: "ספק א", amount: 350, expense_date: "2026-10-20", category: "software", is_recurring: false, recurring_until: null };
 const existing: StoredScanExpense = { ...scanned, id: "manual", import_key: null, notes: null };
 
 describe("new statement duplicate checks", () => {
+  it("defaults to an additional expense without automatically approving it", () => {
+    expect(DEFAULT_SCAN_DUPLICATE_DECISION).toBe("add");
+    expect(scanNeedsDecision(checkScanDuplicates(scanned, [existing]), DEFAULT_SCAN_DUPLICATE_DECISION, "")).toBe(true);
+  });
+  it("approves all selected duplicates together against the final cross-document selection", () => {
+    const rows = [scanned, { ...scanned, importKey: "third:0" }].map(row => ({ ...row, selected: true, decision: DEFAULT_SCAN_DUPLICATE_DECISION, reviewedFingerprint: "" }));
+    const reviewed = approveSelectedScanDuplicates(rows, [existing]);
+    expect(reviewed.every(row => !scanNeedsDecision(checkScanDuplicates(row, [existing], reviewed), row.decision, row.reviewedFingerprint))).toBe(true);
+    expect(reviewed.map(row => row.amount)).toEqual([350, 350]);
+  });
+  it("never bulk-approves unselected, skipped or previously imported expenses", () => {
+    const rows = [
+      { ...scanned, selected: false, decision: DEFAULT_SCAN_DUPLICATE_DECISION, reviewedFingerprint: "" },
+      { ...scanned, importKey: "skip:0", selected: true, decision: "skip" as const, reviewedFingerprint: "" },
+      { ...scanned, importKey: "blocked:0", selected: true, decision: DEFAULT_SCAN_DUPLICATE_DECISION, reviewedFingerprint: "" },
+    ];
+    expect(approveSelectedScanDuplicates(rows, [{ ...existing, import_key: "blocked:0" }])).toEqual(rows);
+  });
   it("compares both manual and earlier scanned expenses, regardless of input order", () => {
     const earlierScan = { ...existing, id: "earlier", import_key: "first:0" };
     expect(checkScanDuplicates(scanned, [existing, earlierScan]).matches.map(e => e.id)).toEqual(["manual", "earlier"]);

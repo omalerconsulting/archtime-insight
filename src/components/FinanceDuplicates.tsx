@@ -12,21 +12,26 @@ import { mergedExpenseAmount } from "@/lib/expense-merge";
 import { expenseSourceLabel } from "@/lib/expense-source";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export function FinanceDuplicates({ pairs, expenses, incomes, approved, onChanged, onEdit }: { pairs: DuplicatePair[]; expenses: Expense[]; incomes: (ReviewIncome & { category?: string; notes?: string | null; status?: string })[]; approved: string[]; onChanged: () => void; onEdit: (kind: DuplicatePair["kind"], id: string) => void }) {
   const [busy, setBusy] = useState(false);
   const [viewing, setViewing] = useState<DuplicatePair | null>(null);
   const [keepId, setKeepId] = useState("");
+  const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const pending = pairs.filter(p => !approved.includes(p.key));
-  const approve = async (key: string) => {
-    if (!window.confirm("לאשר ששתי הרשומות תקינות ואינן כפילות? שתיהן יישארו בתחשיב.")) return;
+  const selected = pending.filter(p => selectedKeys.includes(p.key));
+  const approve = async (keys: string[]) => {
+    const currentKeys = [...new Set(keys)].filter(key => pending.some(p => p.key === key));
+    if (!currentKeys.length || !window.confirm(`לאשר ${currentKeys.length} זוגות רשומות כהוצאות או הכנסות נפרדות, ללא איחוד? כל הרשומות יישארו בתחשיב.`)) return;
     setBusy(true);
     try {
       const { data, error: authError } = await supabase.auth.getUser();
       if (authError || !data.user) throw new Error("נדרשת כניסה מחדש");
-      const { error } = await supabase.from("finance_duplicate_reviews").insert({ pair_key: key, approved_by: data.user.id });
+      const { error } = await supabase.from("finance_duplicate_reviews").upsert(currentKeys.map(pair_key => ({ pair_key, approved_by: data.user.id })), { onConflict: "pair_key", ignoreDuplicates: true });
       if (error) throw error;
-      toast.success("הרשומות אושרו כתקינות"); onChanged();
+      setSelectedKeys(previous => previous.filter(key => !currentKeys.includes(key)));
+      setViewing(null); toast.success("הרשומות אושרו כתקינות"); onChanged();
     } catch { toast.error("האישור לא נשמר"); } finally { setBusy(false); }
   };
   const firstExpense = expenses.find(e => e.id === viewing?.firstId);
@@ -73,9 +78,15 @@ export function FinanceDuplicates({ pairs, expenses, incomes, approved, onChange
   return <><section className="no-print space-y-3 border-s-4 border-warning bg-warning/10 p-4" aria-label="חשד לכפילויות">
     <h2 className="flex items-center gap-2 font-semibold"><AlertTriangle className="size-4" />חשד לכפילויות · {pending.length}</h2>
     <p className="text-sm text-muted-foreground">הרשומות עדיין נכללות בתחשיב. יש לבדוק, לתקן או לאשר שהן תקינות.</p>
+    <div className="flex flex-wrap items-center gap-3 border-t border-border pt-3">
+      <Checkbox aria-label="סימון כל הכפילויות" disabled={busy} checked={selected.length === pending.length ? true : selected.length ? "indeterminate" : false} onCheckedChange={v => setSelectedKeys(v === true ? pending.map(p => p.key) : [])} />
+      <span className="text-sm">{selected.length} נבחרו</span>
+      <Button size="sm" disabled={busy || !selected.length} onClick={() => void approve(selected.map(p => p.key))}><Check className="size-4" />אישור המסומנות ללא איחוד</Button>
+    </div>
     <div className="max-h-80 space-y-3 overflow-auto">{pending.map(p => <div key={p.key} className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
+      <Checkbox aria-label={`סימון כפילות ${p.first} מול ${p.second}`} disabled={busy} checked={selectedKeys.includes(p.key)} onCheckedChange={v => setSelectedKeys(previous => v === true ? [...previous, p.key] : previous.filter(key => key !== p.key))} />
       <div className="min-w-0 text-sm"><p className="font-medium">{p.kind === "expense" ? "הוצאות" : "הכנסות"} · {fmtMoney(p.amount)}</p><p className="break-words">{p.first} ↔ {p.second}</p><p className="text-muted-foreground">{p.reason}</p></div>
-      <div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={()=>{setViewing(p); setKeepId(p.firstId);}}><Eye className="size-3" />השוואת שתי הרשומות</Button><Button size="sm" variant="outline" onClick={()=>onEdit(p.kind,p.firstId)}><Pencil className="size-3" />תיקון הראשונה</Button><Button size="sm" variant="outline" onClick={()=>onEdit(p.kind,p.secondId)}><Pencil className="size-3" />תיקון השנייה</Button><Button size="sm" disabled={busy} onClick={()=>void approve(p.key)}><Check className="size-3" />אישור שתיהן</Button></div>
+      <div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={()=>{setViewing(p); setKeepId(p.firstId);}}><Eye className="size-3" />השוואת שתי הרשומות</Button><Button size="sm" variant="outline" onClick={()=>onEdit(p.kind,p.firstId)}><Pencil className="size-3" />תיקון הראשונה</Button><Button size="sm" variant="outline" onClick={()=>onEdit(p.kind,p.secondId)}><Pencil className="size-3" />תיקון השנייה</Button><Button size="sm" disabled={busy} onClick={()=>void approve([p.key])}><Check className="size-3" />אישור שתיהן</Button></div>
     </div>)}</div>
   </section>
     <Dialog open={!!viewing} onOpenChange={open => { if (!open && !busy) setViewing(null); }}>
@@ -100,7 +111,7 @@ export function FinanceDuplicates({ pairs, expenses, incomes, approved, onChange
             <Button variant="outline" disabled={busy} onClick={() => void merge(false)}><Merge className="size-4" />איחוד ללא סכימה · {fmtMoney(mergedExpenseAmount(kept, other, false))}</Button>
           </div>
         </section>}
-        {viewing && <Button variant="outline" disabled={busy} onClick={() => void approve(viewing.key)}><Check className="size-4" />אישור שתיהן ללא איחוד</Button>}
+        {viewing && <Button variant="outline" disabled={busy} onClick={() => void approve([viewing.key])}><Check className="size-4" />אישור שתיהן ללא איחוד</Button>}
       </DialogContent>
     </Dialog>
   </>;
