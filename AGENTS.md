@@ -20,6 +20,7 @@
 - Statement import paginates all stored expenses after scanning and immediately before saving; reuse finance duplicate rules, retain merged-row fingerprints, and bind each explicit duplicate decision to candidate and match snapshots so edits or newly added matches require fresh review.
 - Derive expense entry-source labels from the preserved statement import fingerprint rather than mutable notes; editing must not change the original source.
 - Finance duplicate approvals persist as administrator-only row-pair fingerprints including matching fields; changed transactions require fresh review, and suspected duplicates remain in the ledger until corrected or deleted.
+- Bulk duplicate approval uses the current selected snapshots; the scan's default additional-expense action never counts as approval until explicitly confirmed, and repeat import fingerprints remain blocked.
 - Expense merges use an administrator-checked atomic database function with row locks and snapshot validation; absorbed rows stay excluded from the ledger but retain import fingerprints to prevent repeat statement imports.
 - Full P&L printing uses an isolated document built from the shared ledger, so every month, item and manual adjustment prints regardless of the active tab.
 - Fixed expenses are virtual monthly ledger entries rather than repeated database inserts; clamp their dates to the actual month end.

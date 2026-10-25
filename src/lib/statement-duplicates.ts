@@ -4,6 +4,16 @@ import type { Expense } from "./pnl-ledger";
 export type StoredScanExpense = Expense & { merged_into?: string | null };
 export type ScanExpense = Omit<Expense, "id" | "notes" | "import_key"> & { importKey: string };
 export type ScanDuplicateCheck = { blocked: boolean; matches: Expense[]; fingerprint: string };
+export const DEFAULT_SCAN_DUPLICATE_DECISION = "add" as const;
+
+export function approveSelectedScanDuplicates<T extends ScanExpense & { selected: boolean; decision: "add" | "skip" | ""; reviewedFingerprint: string }>(rows: T[], stored: StoredScanExpense[]): T[] {
+  const peers = rows.filter(row => row.selected && row.decision !== "skip");
+  return rows.map(row => {
+    const check = checkScanDuplicates(row, stored, peers);
+    if (!row.selected || row.decision === "skip" || check.blocked || !check.matches.length) return row;
+    return { ...row, decision: DEFAULT_SCAN_DUPLICATE_DECISION, reviewedFingerprint: check.fingerprint };
+  });
+}
 
 export function checkScanDuplicates(row: ScanExpense, stored: StoredScanExpense[], peers: ScanExpense[] = []): ScanDuplicateCheck {
   const candidate: Expense = { ...row, id: `scan:${row.importKey}`, import_key: row.importKey, notes: null };

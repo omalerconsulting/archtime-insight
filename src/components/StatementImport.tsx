@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { suggestRecurring } from "@/lib/finance-review";
 import { Checkbox } from "@/components/ui/checkbox";
-import { checkScanDuplicates, scanNeedsDecision, type ScanExpense, type StoredScanExpense } from "@/lib/statement-duplicates";
+import { approveSelectedScanDuplicates, DEFAULT_SCAN_DUPLICATE_DECISION, checkScanDuplicates, scanNeedsDecision, type ScanExpense, type StoredScanExpense } from "@/lib/statement-duplicates";
 import { extractStatementExcel, statementFileKind, statementInputSchema, STATEMENT_MAX_BYTES } from "@/lib/statement-input";
 import { runStatementBatch } from "@/lib/statement-batch";
 
@@ -51,6 +51,24 @@ export function StatementImport({ expenses, onSaved }: { expenses: Expense[]; on
   const change = (index: number, patch: Partial<Proposal>) => setDocuments(previous => previous.map(d => d.id === activeId ? { ...d, rows: d.rows.map((r, i) => i === index ? { ...r, ...patch } : r) } : d));
   const peers = selectedRows.map(asExpense);
   const checks = rows.map(r => checkScanDuplicates(asExpense(r), stored, peers));
+  const duplicateRows = allRows.filter(r => {
+    const check = checkScanDuplicates(asExpense(r), stored, allRows.map(asExpense));
+    return !check.blocked && check.matches.length > 0;
+  });
+  const selectedDuplicates = duplicateRows.filter(r => r.selected && r.decision !== "skip");
+  const selectDuplicates = (selected: boolean) => {
+    const keys = new Set(duplicateRows.map(r => r.importKey));
+    setDocuments(previous => previous.map(d => ({ ...d, rows: d.rows.map(r => keys.has(r.importKey) ? { ...r, selected, decision: DEFAULT_SCAN_DUPLICATE_DECISION, reviewedFingerprint: "" } : r) })));
+  };
+  const approveDuplicates = () => {
+    if (!window.confirm(`לאשר ${selectedDuplicates.length} הוצאות חשודות כהוצאות נוספות ונפרדות, ללא איחוד? הן יישמרו רק בלחיצה על שמירת השורות המאושרות.`)) return;
+    setDocuments(previous => {
+      const reviewed = approveSelectedScanDuplicates(previous.flatMap(d => d.rows).map(r => ({ ...r, ...asExpense(r) })), stored);
+      const byKey = new Map(reviewed.map(r => [r.importKey, r]));
+      return previous.map(d => ({ ...d, rows: d.rows.map(r => ({ ...r, decision: byKey.get(r.importKey)?.decision ?? r.decision, reviewedFingerprint: byKey.get(r.importKey)?.reviewedFingerprint ?? r.reviewedFingerprint })) }));
+    });
+    toast.success("הכפילויות המסומנות אושרו כהוצאות נוספות; יש לשמור להשלמת הייבוא");
+  };
   const upload = async (files: File[], replaceId?: string) => {
     if (batchLock.current || !files.length) return;
     batchLock.current = true;
@@ -78,7 +96,7 @@ export function StatementImport({ expenses, onSaved }: { expenses: Expense[]; on
       setStored(currentExpenses);
       changeDocument(id, { status: "ready", warnings: result.warnings, rows: result.rows.map((r, i) => {
         const importKey = `${hash}:${i}`;
-        return { ...r, importKey, selected: false, decision: "" as const, reviewedFingerprint: "", is_recurring: suggestRecurring(r.category, r.vendor, currentExpenses.filter(e => !e.merged_into)), recurring_until: "" };
+        return { ...r, importKey, selected: false, decision: DEFAULT_SCAN_DUPLICATE_DECISION, reviewedFingerprint: "", is_recurring: suggestRecurring(r.category, r.vendor, currentExpenses.filter(e => !e.merged_into)), recurring_until: "" };
       }) });
     }, (document, error) => changeDocument(document.id, { status: "error", error: error instanceof Error ? error.message : "הסריקה נכשלה. ניתן לנסות שוב או להחליף קובץ." })); }
     finally { setBusy(false); batchLock.current = false; }
@@ -119,6 +137,11 @@ export function StatementImport({ expenses, onSaved }: { expenses: Expense[]; on
           <p className="text-sm text-muted-foreground" role="status">{documents.filter(d => d.status !== "queued" && d.status !== "scanning").length} מתוך {documents.length} מסמכים נסרקו · {documents.filter(d => d.status === "error").length} תקלות</p>
           <Button variant="outline" disabled={busy || saving} onClick={() => input.current?.click()}><Upload className="size-4" />הוספת קבצים</Button>
         </div>
+        {duplicateRows.length > 0 && <div className="flex flex-wrap items-center gap-3 border-y border-border py-3">
+          <Checkbox aria-label="סימון כל הכפילויות בכל המסמכים" disabled={busy || saving} checked={selectedDuplicates.length === duplicateRows.length ? true : selectedDuplicates.length ? "indeterminate" : false} onCheckedChange={v => selectDuplicates(v === true)} />
+          <span className="text-sm">{selectedDuplicates.length} מתוך {duplicateRows.length} כפילויות מסומנות</span>
+          <Button variant="outline" disabled={busy || saving || !selectedDuplicates.length} onClick={approveDuplicates}><CheckCircle2 className="size-4" />אישור הכפילויות המסומנות כהוצאות נוספות</Button>
+        </div>}
         <div className="grid max-h-60 gap-2 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3">
           {documents.map(d => <Button key={d.id} variant={d.id === activeId ? "secondary" : "outline"} className="h-auto min-w-0 justify-start px-3 py-3 text-start" onClick={() => setActiveId(d.id)} aria-pressed={d.id === activeId} aria-label={`מסמך ${d.file.name}`}>
             {d.status === "scanning" ? <Loader2 className="size-4 shrink-0 animate-spin motion-reduce:animate-none" /> : d.status === "error" ? <AlertCircle className="size-4 shrink-0 text-destructive" /> : d.status === "saved" ? <CheckCircle2 className="size-4 shrink-0 text-success" /> : <FileText className="size-4 shrink-0" />}
@@ -151,10 +174,11 @@ export function StatementImport({ expenses, onSaved }: { expenses: Expense[]; on
                     <p>{catLabel(e.category)} · {e.is_recurring ? "קבועה חודשית" : "זמנית"}{e.recurring_until ? ` · עד ${e.recurring_until}` : ""}</p>
                     {e.notes && <p className="break-words">{e.notes}</p>}
                   </div>)}
-                  <Select disabled={saving} value={r.reviewedFingerprint === checks[i]?.fingerprint ? r.decision : ""} onValueChange={v => change(i, { decision: v === "add" ? "add" : "skip", reviewedFingerprint: checks[i]?.fingerprint || "" })}>
+                  <Select disabled={saving} value={r.decision || DEFAULT_SCAN_DUPLICATE_DECISION} onValueChange={v => change(i, { decision: v === "add" ? "add" : "skip", reviewedFingerprint: checks[i]?.fingerprint || "" })}>
                     <SelectTrigger aria-label={`פעולה בכפילות שורה ${i+1}`}><SelectValue placeholder="בחרו מה לעשות בכפילות" /></SelectTrigger>
                     <SelectContent><SelectItem value="skip">דלג — לא להוסיף</SelectItem><SelectItem value="add">זו הוצאה נפרדת — הוסף בכל זאת</SelectItem></SelectContent>
                   </Select>
+                  {r.decision !== "skip" && <Button size="sm" variant="outline" disabled={saving || !scanNeedsDecision(checks[i], r.decision, r.reviewedFingerprint)} onClick={() => change(i, { selected: true, decision: DEFAULT_SCAN_DUPLICATE_DECISION, reviewedFingerprint: checks[i]?.fingerprint || "" })}><CheckCircle2 className="size-3" />{scanNeedsDecision(checks[i], r.decision, r.reviewedFingerprint) ? "אישור כהוצאה נוספת" : "אושרה כהוצאה נוספת"}</Button>}
                 </div> : <p className="text-muted-foreground">{r.decision === "skip" ? "לא תתווסף" : "לא נמצאה כפילות"}</p>}
               </td>
             </tr></ReactFragment>)}
