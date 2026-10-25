@@ -9,6 +9,7 @@ import type { ReviewIncome } from "@/lib/finance-review";
 import { catLabel, type Expense } from "@/lib/pnl-ledger";
 import { incomeVat } from "@/lib/income-vat";
 import { mergedExpenseAmount } from "@/lib/expense-merge";
+import { expenseSourceLabel } from "@/lib/expense-source";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 
@@ -51,6 +52,7 @@ export function FinanceDuplicates({ pairs, expenses, incomes, approved, onChange
       if (!e) return <p>ההוצאה אינה זמינה</p>;
       return <dl className="space-y-2 text-sm">
         <Detail label="תיאור" value={e.description} /><Detail label="סכום" value={fmtMoney(e.amount)} />
+        <Detail label="מקור הזנה" value={expenseSourceLabel(e)} />
         <Detail label="ספק" value={e.vendor} /><Detail label="תאריך" value={e.expense_date} />
         <Detail label="קטגוריה" value={catLabel(e.category)} /><Detail label="סוג" value={e.is_recurring ? "קבועה חודשית" : "זמנית / חד־פעמית"} />
         {e.is_recurring && <Detail label="עד תאריך" value={e.recurring_until || "ללא תאריך סיום"} />}

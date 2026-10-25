@@ -1,4 +1,5 @@
 # Finance management extension
+- [x] Label approved scanned expenses automatic and directly entered expenses manual; verify existing records and editing preserve source.
 - [x] Show both suspected duplicate records and merge expenses with or without summation; verify persisted results.
 - [x] Income VAT basis, reconciled bank receipts/profit reporting and calculator integration.
 - [x] Repair and verify editing of existing expenses.
