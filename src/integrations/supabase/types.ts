@@ -240,6 +240,8 @@ export type Database = {
           status: string
           total_amount: number
           updated_at: string
+          vat_included: boolean
+          vat_rate: number
         }
         Insert: {
           category?: string
@@ -252,6 +254,8 @@ export type Database = {
           status?: string
           total_amount?: number
           updated_at?: string
+          vat_included?: boolean
+          vat_rate?: number
         }
         Update: {
           category?: string
@@ -264,6 +268,8 @@ export type Database = {
           status?: string
           total_amount?: number
           updated_at?: string
+          vat_included?: boolean
+          vat_rate?: number
         }
         Relationships: []
       }
@@ -366,6 +372,8 @@ export type Database = {
           sort_order: number
           supplier_name: string
           updated_at: string
+          vat_included: boolean
+          vat_rate: number
         }
         Insert: {
           amount?: number
@@ -378,6 +386,8 @@ export type Database = {
           sort_order?: number
           supplier_name?: string
           updated_at?: string
+          vat_included?: boolean
+          vat_rate?: number
         }
         Update: {
           amount?: number
@@ -390,6 +400,8 @@ export type Database = {
           sort_order?: number
           supplier_name?: string
           updated_at?: string
+          vat_included?: boolean
+          vat_rate?: number
         }
         Relationships: [
           {
@@ -511,6 +523,8 @@ export type Database = {
           start_date: string | null
           status: string
           updated_at: string
+          vat_included: boolean
+          vat_rate: number
         }
         Insert: {
           client_name?: string | null
@@ -527,6 +541,8 @@ export type Database = {
           start_date?: string | null
           status?: string
           updated_at?: string
+          vat_included?: boolean
+          vat_rate?: number
         }
         Update: {
           client_name?: string | null
@@ -543,6 +559,8 @@ export type Database = {
           start_date?: string | null
           status?: string
           updated_at?: string
+          vat_included?: boolean
+          vat_rate?: number
         }
         Relationships: []
       }
