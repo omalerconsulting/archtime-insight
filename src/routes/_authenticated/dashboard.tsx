@@ -46,6 +46,8 @@ import {
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
     meta: [
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
       { title: "דשבורד ניהולי | ניהול שעות ופרויקטים" },
       {
         name: "description",

@@ -14,6 +14,8 @@ import { purgeData, RESET_SCOPES, type ResetScope } from "@/lib/admin-reset.func
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({
     meta: [
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
       { title: "הגדרות משרד | ניהול שעות ופרויקטים" },
       { name: "description", content: "שם המשרד, לוגו, תקן שעות יומי ודוא״ל רואה החשבון." },
       { property: "og:title", content: "הגדרות משרד" },

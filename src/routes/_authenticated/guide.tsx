@@ -4,6 +4,8 @@ import { useAuth } from "@/lib/auth";
 export const Route = createFileRoute("/_authenticated/guide")({
   head: () => ({
     meta: [
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
       { title: "הוראות הפעלה | ניהול שעות ופרויקטים" },
       { name: "description", content: "מדריך שימוש קצר לעובדים ולמנהלים במערכת ניהול השעות והפרויקטים." },
       { property: "og:title", content: "הוראות הפעלה" },

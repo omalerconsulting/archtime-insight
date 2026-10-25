@@ -37,6 +37,8 @@ import {
 export const Route = createFileRoute("/_authenticated/report")({
   head: () => ({
     meta: [
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
       { title: "דוח שעות חודשי | ניהול שעות ופרויקטים" },
       { name: "description", content: "דוח שעות חודשי מפורט ומסכם להדפסה והעברה למנהל." },
       { property: "og:title", content: "דוח שעות חודשי" },
