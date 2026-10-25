@@ -56,7 +56,7 @@ export function StatementImport({ expenses, onSaved }: { expenses: Expense[]; on
     <Button variant="outline" onClick={() => input.current?.click()} disabled={busy}><ScanLine className="size-4" />סריקת דפי חשבון / אשראי</Button>
     <Dialog open={open} onOpenChange={v => { if (!busy && !saving) setOpen(v); }}>
       <DialogContent className="max-h-[90dvh] w-[95vw] max-w-6xl overflow-y-auto" dir="rtl" onInteractOutside={e => e.preventDefault()}>
-        <DialogTitle>אישור הוצאות מהמסמך</DialogTitle>
+        <DialogTitle className="pe-8">אישור הוצאות מהמסמך</DialogTitle>
         <DialogDescription>{filename} · סריקה באמצעות Lovable AI כרוכה בשימוש ביתרת AI. מסמך בנק אינו תחליף לחשבונית מס.</DialogDescription>
         {busy ? <div className="flex items-center gap-3 py-8" role="status"><Loader2 className="size-5 animate-spin" />סורק את המסמך…</div> : <>
           {warnings.length > 0 && <ul className="list-inside list-disc text-sm text-warning">{warnings.map((w,i) => <li key={i}>{w}</li>)}</ul>}
