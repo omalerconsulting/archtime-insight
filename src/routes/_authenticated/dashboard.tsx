@@ -5,6 +5,7 @@ import { AlertTriangle, Download, Printer, TrendingDown, TrendingUp } from "luci
 import { supabase } from "@/integrations/supabase/client";
 import { AdminOnly } from "@/components/AdminOnly";
 import { exportCsv } from "@/lib/csv";
+import { incomeVat } from "@/lib/income-vat";
 import {
   computeHours,
   daysBetween,
@@ -114,7 +115,7 @@ function DashboardPage() {
             .from("monthly_reports")
             .select("id, user_id, month, status")
             .eq("status", "submitted"),
-          supabase.from("project_commissions").select("project_id, amount, paid_amount"),
+          supabase.from("project_commissions").select("project_id, amount, paid_amount, vat_included, vat_rate"),
         ]);
       const err =
         projects.error ||
@@ -154,7 +155,7 @@ function DashboardPage() {
         const ms = d.milestones.filter((m) => m.project_id === p.id);
         const collected = ms.reduce((s, m) => {
           const full = milestoneAmount(m.amount_type, Number(m.amount_value), Number(p.fee_total));
-          return s + (m.status === "paid" ? full : Math.min(Number(m.paid_amount) || 0, full));
+          return s + incomeVat(m.status === "paid" ? full : Math.min(Number(m.paid_amount) || 0, full), p).net;
         }, 0);
         const openMs = ms
           .filter((m) => m.status !== "paid")
@@ -168,11 +169,11 @@ function DashboardPage() {
         // Project income = office fee + supplier commissions attached to the project.
         const commissionTotal = d.commissions
           .filter((c) => c.project_id === p.id)
-          .reduce((s, c) => s + Number(c.amount || 0), 0);
-        const income = Number(p.fee_total) + commissionTotal;
+          .reduce((s, c) => s + incomeVat(Number(c.amount || 0), c).net, 0);
+        const income = incomeVat(Number(p.fee_total), p).net + commissionTotal;
         const commissionCollected = d.commissions
           .filter((c) => c.project_id === p.id)
-          .reduce((s, c) => s + Math.min(Number(c.paid_amount) || 0, Number(c.amount) || 0), 0);
+          .reduce((s, c) => s + incomeVat(Math.min(Number(c.paid_amount) || 0, Number(c.amount) || 0), c).net, 0);
         const profit = income - cost;
         // Projected profit at the current burn rate: extrapolate cost to the full hours budget.
         const projectedProfit =

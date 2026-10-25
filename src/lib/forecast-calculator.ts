@@ -1,4 +1,5 @@
-export type ForecastInput = { target: number; expenses: number; nonDeductible: number; corporateRate: number; dividendRate: number; vatRate: number; inputVat: number; advanceRate: number; plannedRevenue: number; averageDeal: number; installmentPercent: number; scenario: "company" | "dividend" };
+import { incomeVat } from "./income-vat";
+export type ForecastInput = { target: number; expenses: number; nonDeductible: number; corporateRate: number; dividendRate: number; vatRate: number; inputVat: number; advanceRate: number; plannedRevenue: number; averageDeal: number; installmentPercent: number; averageDealVatIncluded?: boolean; scenario: "company" | "dividend" };
 export function calculateForecast(i: ForecastInput) {
   for (const value of [i.target,i.expenses,i.nonDeductible,i.inputVat,i.plannedRevenue,i.averageDeal]) if (!Number.isFinite(value) || value < 0) throw new Error("סכומים חייבים להיות תקינים ולא שליליים");
   for (const value of [i.corporateRate,i.dividendRate]) if (!Number.isFinite(value) || value < 0 || value >= 100) throw new Error("שיעורי מס חייבים להיות בין 0 לפחות מ־100");
@@ -17,7 +18,8 @@ export function calculateForecast(i: ForecastInput) {
   const vatCredit=Math.max(0,i.inputVat-outputVat);
   const advance=requiredRevenue*i.advanceRate/100;
   const gap=Math.max(0,requiredRevenue-i.plannedRevenue);
-  const monthlyDeal=i.averageDeal*i.installmentPercent/100;
+  const averageDealNet=incomeVat(i.averageDeal,{vat_included:i.averageDealVatIncluded,vat_rate:i.vatRate}).net;
+   const monthlyDeal=averageDealNet*i.installmentPercent/100;
   const deals=Math.ceil(gap/monthlyDeal);
-  return { requiredRevenue,preTax,corporateTax,retained,dividendTax,netDividend,outputVat,vatPayment,vatCredit,advance,gap,monthlyDeal,deals,newContractValue:gap/(i.installmentPercent/100),taxProvision:corporateTax+vatPayment,authorityCash:advance+vatPayment,corporateBalance:corporateTax-advance,customerGross:requiredRevenue+outputVat };
+  return { averageDealNet, requiredRevenue,preTax,corporateTax,retained,dividendTax,netDividend,outputVat,vatPayment,vatCredit,advance,gap,monthlyDeal,deals,newContractValue:gap/(i.installmentPercent/100),taxProvision:corporateTax+vatPayment,authorityCash:advance+vatPayment,corporateBalance:corporateTax-advance,customerGross:requiredRevenue+outputVat };
 }

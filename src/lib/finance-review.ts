@@ -1,6 +1,7 @@
+import { incomeVat, type VatBasis } from "./income-vat";
 import { expenseOccurs, type Expense } from "./pnl-ledger";
 
-export type ReviewIncome = { id: string; source: string; client_name: string | null; total_amount: number };
+export type ReviewIncome = VatBasis & { id: string; source: string; client_name: string | null; total_amount: number };
 export type DuplicatePair = { key: string; kind: "expense" | "income"; firstId: string; secondId: string; first: string; second: string; amount: number; reason: string };
 const normalize = (value: string | null) => (value || "").normalize("NFKC").toLocaleLowerCase("he").replace(/[\s\p{P}]+/gu, "");
 const same = (a: string | null, b: string | null) => !!normalize(a) && normalize(a) === normalize(b);
@@ -19,7 +20,7 @@ export function findDuplicates(expenses: Expense[], incomes: ReviewIncome[]): Du
     }
   }));
   incomes.forEach((a,i) => incomes.slice(i+1).forEach(b => {
-    if (money(a.total_amount) === money(b.total_amount) && same(a.source,b.source) && (same(a.client_name,b.client_name) || (!a.client_name && !b.client_name))) add("income", a,b,a.source,b.source,a.total_amount,"מקור, לקוח וסכום זהים", [a,b].sort((x,y)=>x.id.localeCompare(y.id)).map(e=>[e.source,e.client_name,e.total_amount]));
+    if (money(incomeVat(a.total_amount,a).net) === money(incomeVat(b.total_amount,b).net) && same(a.source,b.source) && (same(a.client_name,b.client_name) || (!a.client_name && !b.client_name))) add("income", a,b,a.source,b.source,incomeVat(a.total_amount,a).net,"מקור, לקוח וסכום זהים", [a,b].sort((x,y)=>x.id.localeCompare(y.id)).map(e=>[e.source,e.client_name,e.total_amount,e.vat_included ?? false,e.vat_rate ?? 0]));
   }));
   return pairs;
 }
