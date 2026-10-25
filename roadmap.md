@@ -1,6 +1,6 @@
-# Expense and P&L upgrade
-- [x] Edit existing expenses and expand accounting categories.
-- [x] Monthly column P&L with reconciled itemized details.
-- [x] Missing-expense and monthly deviation alerts.
-- [x] Scan bank/card PDF or images; editable review and explicit approval.
-- [x] Test calculations and verify admin flow.
+# Finance management extension
+- [ ] Bulk selection and confirmed deletion for expenses and additional incomes.
+- [ ] Fixed/temporary expense selection, automatic monthly placement and scan review.
+- [ ] Persistent duplicate review with correction and explicit approval.
+- [ ] Complete printable P&L with details and current/next-month forecasts.
+- [ ] Verify administrator-only access, calculations and real UI flows.

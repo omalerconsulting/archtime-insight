@@ -37,6 +37,17 @@ export function expenseOccurs(e: Expense, key: string) {
     ? key >= e.expense_date.slice(0, 7) && (!e.recurring_until || `${key}-01` <= e.recurring_until)
     : key === e.expense_date.slice(0, 7);
 }
+export function monthlyExpenseDate(date: string, key: string) {
+  const [year, month] = key.split("-").map(Number);
+  const day = Math.min(Number(date.slice(8, 10)), new Date(Date.UTC(year, month, 0)).getUTCDate());
+  return `${key}-${String(day).padStart(2, "0")}`;
+}
+export function forecastMonths(data: LedgerData | undefined, today: string) {
+  const year = Number(today.slice(0, 4)), month = Number(today.slice(5, 7));
+  const current = buildLedger(data, year)[month - 1];
+  const next = month === 12 ? buildLedger(data, year + 1)[0] : buildLedger(data, year)[month];
+  return { current, next };
+}
 export function buildLedger(data: LedgerData | undefined, year: number) {
   const rows = Array.from({ length: 12 }, (_, i) => ({ key: `${year}-${String(i + 1).padStart(2, "0")}`, projectActual: 0, projectForecast: 0, otherActual: 0, otherForecast: 0, expenses: 0, details: [] as LedgerDetail[] }));
   const byKey = new Map(rows.map(r => [r.key, r]));
@@ -69,7 +80,7 @@ export function buildLedger(data: LedgerData | undefined, year: number) {
       add({ ...detail, id: `${c.id}-forecast`, bucket: "projectForecast", date: c.expected_date || "", amount: Math.max(0, Number(c.amount) - paid) });
     });
     data.expenses.forEach(e => rows.forEach(r => {
-      if (expenseOccurs(e, r.key)) add({ id: `${e.id}-${r.key}`, bucket: "expenses", date: e.is_recurring ? `${r.key}-${e.expense_date.slice(8, 10)}` : e.expense_date, description: e.description, party: e.vendor || "—", amount: Number(e.amount), category: e.category, expenseId: e.id, recurring: e.is_recurring });
+      if (expenseOccurs(e, r.key)) add({ id: `${e.id}-${r.key}`, bucket: "expenses", date: e.is_recurring ? monthlyExpenseDate(e.expense_date, r.key) : e.expense_date, description: e.description, party: e.vendor || "—", amount: Number(e.amount), category: e.category, expenseId: e.id, recurring: e.is_recurring });
     }));
   }
   return rows.map(r => {

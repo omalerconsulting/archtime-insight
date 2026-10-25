@@ -7,13 +7,17 @@ import { supabase } from "@/integrations/supabase/client";
 import { AdminOnly } from "@/components/AdminOnly";
 import { PnlStatement } from "@/components/PnlStatement";
 import { StatementImport } from "@/components/StatementImport";
-import { EXPENSE_CATEGORIES, catLabel, buildLedger, validDate, type Expense } from "@/lib/pnl-ledger";
+import { EXPENSE_CATEGORIES, catLabel, buildLedger, forecastMonths, validDate, type Expense } from "@/lib/pnl-ledger";
 import { fmtMoney, MONTH_NAMES, milestoneAmount, todayIso, yearOptions } from "@/lib/time";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
+import { BulkFinanceActions } from "@/components/BulkFinanceActions";
+import { FinanceDuplicates } from "@/components/FinanceDuplicates";
+import { findDuplicates, suggestRecurring } from "@/lib/finance-review";
+import { AUTHORITY_NOTE, printFullPnl } from "@/lib/pnl-print";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
@@ -66,12 +70,14 @@ type OtherMilestone = {
 
 function PnlPage() {
   const qc = useQueryClient();
+  const [tab, setTab] = useState("summary");
+  const [editTarget, setEditTarget] = useState<{ kind: "expense" | "income"; id: string } | null>(null);
   const [year, setYear] = useState(new Date().getFullYear());
 
   const q = useQuery({
     queryKey: ["pnl"],
     queryFn: async () => {
-      const [projects, milestones, expenses, incomes, incomeMs, adj, comms] = await Promise.all([
+      const [projects, milestones, expenses, incomes, incomeMs, adj, comms, reviews] = await Promise.all([
         supabase.from("projects").select("id, code, name, fee_total, status"),
         supabase.from("project_milestones").select("*"),
         supabase.from("expenses").select("*").order("expense_date", { ascending: false }),
@@ -79,8 +85,9 @@ function PnlPage() {
         supabase.from("other_income_milestones").select("*").order("sort_order"),
         supabase.from("pnl_adjustments").select("*"),
         supabase.from("project_commissions").select("id, project_id, supplier_name, amount, expected_date, paid_amount, paid_date"),
+        supabase.from("finance_duplicate_reviews").select("pair_key"),
       ]);
-      for (const r of [projects, milestones, expenses, incomes, incomeMs, adj, comms]) {
+      for (const r of [projects, milestones, expenses, incomes, incomeMs, adj, comms, reviews]) {
         if (r.error) throw r.error;
       }
       return {
@@ -91,6 +98,7 @@ function PnlPage() {
         incomeMs: (incomeMs.data ?? []) as OtherMilestone[],
         adjustments: adj.data ?? [],
         commissions: comms.data ?? [],
+        reviews: (reviews.data ?? []).map(r=>r.pair_key),
       };
     },
   });
@@ -107,8 +115,8 @@ function PnlPage() {
     }),
     { income: 0, expenses: 0, profit: 0 },
   );
-  const currentKey = todayIso().slice(0, 7);
-  const current = rows.find((r) => r.key === currentKey);
+  const { current, next } = forecastMonths(q.data, todayIso());
+  const duplicatePairs = findDuplicates(q.data?.expenses ?? [], q.data?.incomes ?? []);
 
   return (
     <div className="space-y-6">
@@ -132,14 +140,16 @@ function PnlPage() {
               ))}
             </SelectContent>
           </Select>
-          <Button onClick={() => window.print()}>
+          <Button disabled={!q.data} onClick={() => { if (!printFullPnl(rows, year)) toast.error("יש לאפשר פתיחת חלון להדפסת הדוח"); }}>
             <Printer className="size-4" />
-            הדפסה / הורדת PDF
+            דוח מלא להדפסה / PDF
           </Button>
         </div>
       </div>
 
-      <Tabs defaultValue="summary">
+      {q.isError && <p role="alert" className="text-destructive">טעינת הנתונים נכשלה. <Button variant="link" onClick={()=>void q.refetch()}>ניסיון נוסף</Button></p>}
+      <FinanceDuplicates pairs={duplicatePairs} approved={q.data?.reviews ?? []} onChanged={invalidate} onEdit={(kind,id)=>{ setEditTarget({kind,id}); setTab(kind === "expense" ? "expenses" : "incomes"); }} />
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="no-print print:hidden">
           <TabsTrigger value="summary">תחזית שנתית</TabsTrigger>
           <TabsTrigger value="expenses">הוצאות</TabsTrigger>
@@ -151,7 +161,7 @@ function PnlPage() {
             <h2 className="hidden text-xl font-bold print:block">
               דוח רווח והפסד – שנת {year}
             </h2>
-            <section className="grid gap-4 md:grid-cols-4">
+            <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-5">
               <Stat label="סה״כ הכנסות בשנה" value={fmtMoney(totals.income)} />
               <Stat label="סה״כ הוצאות בשנה" value={fmtMoney(totals.expenses)} />
               <Stat
@@ -160,11 +170,13 @@ function PnlPage() {
                 tone={totals.profit >= 0 ? "good" : "bad"}
               />
               <Stat
-                label="רווח בחודש הנוכחי"
+                label={`צפי החודש · ${current?.key ?? ""}`}
                 value={current ? fmtMoney(current.profit) : "—"}
                 tone={(current?.profit ?? 0) >= 0 ? "good" : "bad"}
               />
+              <Stat label={`צפי חודש הבא · ${next?.key ?? ""}`} value={next ? fmtMoney(next.profit) : "—"} tone={(next?.profit ?? 0) >= 0 ? "good" : "bad"} />
             </section>
+            <p className="text-sm text-muted-foreground">{AUTHORITY_NOTE}</p>
 
             <PnlStatement rows={rows} expenses={q.data?.expenses ?? []} year={year}
               adjustment={r => <AdjustDialog monthKeyValue={r.key} label={r.key} onSaved={invalidate} />} />
@@ -172,11 +184,13 @@ function PnlPage() {
         </TabsContent>
 
         <TabsContent value="expenses" className="mt-4">
-          <ExpensesTab expenses={q.data?.expenses ?? []} onChanged={invalidate} />
+          <ExpensesTab key={editTarget?.kind === "expense" ? editTarget.id : "expenses"} initialId={editTarget?.kind === "expense" ? editTarget.id : undefined} expenses={q.data?.expenses ?? []} onChanged={invalidate} />
         </TabsContent>
 
         <TabsContent value="incomes" className="mt-4">
           <IncomesTab
+            key={editTarget?.kind === "income" ? editTarget.id : "incomes"}
+            initialId={editTarget?.kind === "income" ? editTarget.id : undefined}
             incomes={q.data?.incomes ?? []}
             milestones={q.data?.incomeMs ?? []}
             onChanged={invalidate}
@@ -278,9 +292,11 @@ function AdjustDialog({
   );
 }
 
-function ExpensesTab({ expenses, onChanged }: { expenses: Expense[]; onChanged: () => void }) {
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState({
+function ExpensesTab({ expenses, onChanged, initialId }: { expenses: Expense[]; onChanged: () => void; initialId?: string }) {
+  const initial = expenses.find(e=>e.id===initialId);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(initial?.id ?? null);
+  const [form, setForm] = useState(initial ? { category: initial.category, description: initial.description, vendor: initial.vendor || "", amount: String(initial.amount), expense_date: initial.expense_date, is_recurring: initial.is_recurring, recurring_until: initial.recurring_until || "", notes: initial.notes || "" } : {
     category: "general",
     description: "",
     vendor: "",
@@ -306,6 +322,8 @@ function ExpensesTab({ expenses, onChanged }: { expenses: Expense[]; onChanged: 
         recurring_until: form.is_recurring && form.recurring_until ? form.recurring_until : null,
         notes: form.notes.trim() || null,
       };
+      const suspected = findDuplicates([...expenses.filter(e=>e.id!==editingId), { ...payload, id: editingId || "draft" }], []);
+      if (suspected.some(p=>p.firstId===(editingId || "draft") || p.secondId===(editingId || "draft")) && !window.confirm("חשד לכפילות בהוצאה. לשמור בכל זאת ולהעביר לבדיקת כפילויות?")) throw new Error("השמירה בוטלה; ניתן לתקן את ההוצאה");
       const { error } = editingId ? await supabase.from("expenses").update(payload).eq("id", editingId) : await supabase.from("expenses").insert(payload);
       if (error) throw error;
     },
@@ -319,14 +337,17 @@ function ExpensesTab({ expenses, onChanged }: { expenses: Expense[]; onChanged: 
   });
 
   const remove = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("expenses").delete().eq("id", id);
+    mutationFn: async (ids: string[]) => {
+      if (!ids.length) return;
+      const { error } = await supabase.from("expenses").delete().in("id", ids);
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("ההוצאה נמחקה");
+      toast.success("ההוצאות נמחקו");
+      setSelected([]);
       onChanged();
     },
+    onError: () => toast.error("המחיקה נכשלה"),
   });
 
   return (
@@ -340,7 +361,7 @@ function ExpensesTab({ expenses, onChanged }: { expenses: Expense[]; onChanged: 
         <div className="grid gap-4 sm:grid-cols-3">
           <div className="space-y-2">
             <Label htmlFor="ex-cat">קטגוריה</Label>
-            <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
+            <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v, is_recurring: suggestRecurring(v, form.vendor, expenses) })}>
               <SelectTrigger id="ex-cat">
                 <SelectValue />
               </SelectTrigger>
@@ -398,12 +419,8 @@ function ExpensesTab({ expenses, onChanged }: { expenses: Expense[]; onChanged: 
             />
           </div>
           <div className="flex items-center gap-3">
-            <Switch
-              id="ex-rec"
-              checked={form.is_recurring}
-              onCheckedChange={(v) => setForm({ ...form, is_recurring: v })}
-            />
-            <Label htmlFor="ex-rec">הוצאה קבועה חודשית</Label>
+            <Label htmlFor="ex-rec">סוג הוצאה</Label>
+            <Select value={form.is_recurring ? "fixed" : "temporary"} onValueChange={v=>setForm({...form,is_recurring:v==="fixed"})}><SelectTrigger id="ex-rec"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="fixed">קבועה חודשית</SelectItem><SelectItem value="temporary">זמנית / חד־פעמית</SelectItem></SelectContent></Select>
           </div>
           <div className="space-y-2 sm:col-span-2">
             <Label htmlFor="ex-notes">הערות</Label>
@@ -422,11 +439,14 @@ function ExpensesTab({ expenses, onChanged }: { expenses: Expense[]; onChanged: 
         {editingId && <Button className="ms-2 mt-4" variant="outline" onClick={() => { setEditingId(null); setForm({ category: "general", description: "", vendor: "", amount: "", expense_date: todayIso(), is_recurring: false, recurring_until: "", notes: "" }); }}>ביטול</Button>}
       </section>
 
+      <p className="text-sm text-muted-foreground">קבועה משובצת אוטומטית מדי חודש עד תאריך הסיום; זמנית רק בחודש שנבחר. הסיווג הראשוני מוצע לפי הקטגוריה וניתן לשינוי.</p>
+      <BulkFinanceActions ids={expenses.map(e=>e.id)} selected={selected} onSelect={setSelected} onDelete={ids=>remove.mutate(ids)} busy={remove.isPending} label="הוצאות" />
       <section className="overflow-x-auto rounded-xl border border-border bg-card">
         <table className="w-full text-sm">
           <caption className="p-3 text-start font-semibold">כל ההוצאות</caption>
           <thead className="bg-muted/60">
             <tr>
+              <th scope="col" className="p-2 text-start">סימון</th>
               <th scope="col" className="p-2 text-start">תאריך</th>
               <th scope="col" className="p-2 text-start">קטגוריה</th>
               <th scope="col" className="p-2 text-start">תיאור</th>
@@ -439,6 +459,7 @@ function ExpensesTab({ expenses, onChanged }: { expenses: Expense[]; onChanged: 
           <tbody>
             {expenses.map((e) => (
               <tr key={e.id} className="border-t border-border">
+                <td className="p-2"><Checkbox aria-label={`סימון הוצאה ${e.description}`} checked={selected.includes(e.id)} onCheckedChange={v=>setSelected(v ? [...selected,e.id] : selected.filter(id=>id!==e.id))} /></td>
                 <td className="p-2">{e.expense_date}</td>
                 <td className="p-2">{catLabel(e.category)}</td>
                 <td className="p-2 font-medium"><Button variant="link" className="h-auto whitespace-normal p-0 text-start" onClick={() => {
@@ -457,7 +478,7 @@ function ExpensesTab({ expenses, onChanged }: { expenses: Expense[]; onChanged: 
                     size="icon"
                     variant="ghost"
                     aria-label={`מחיקת ההוצאה ${e.description}`}
-                    onClick={() => { if (window.confirm("למחוק את ההוצאה?")) remove.mutate(e.id); }}
+                    onClick={() => { if (window.confirm("למחוק את ההוצאה?")) remove.mutate([e.id]); }}
                   >
                     <Trash2 className="size-4" />
                   </Button>
@@ -466,7 +487,7 @@ function ExpensesTab({ expenses, onChanged }: { expenses: Expense[]; onChanged: 
             ))}
             {expenses.length === 0 && (
               <tr>
-                <td colSpan={7} className="p-6 text-center text-muted-foreground">
+                <td colSpan={8} className="p-6 text-center text-muted-foreground">
                   עדיין לא הוזנו הוצאות.
                 </td>
               </tr>
@@ -482,26 +503,36 @@ function IncomesTab({
   incomes,
   milestones,
   onChanged,
+  initialId,
 }: {
+  initialId?: string;
   incomes: OtherIncome[];
   milestones: OtherMilestone[];
   onChanged: () => void;
 }) {
-  const [form, setForm] = useState({ source: "", client_name: "", total_amount: "", notes: "" });
+  const initial = incomes.find(i=>i.id===initialId);
+  const [editingId, setEditingId] = useState<string | null>(initial?.id ?? null);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [form, setForm] = useState(initial ? {source:initial.source,client_name:initial.client_name || "",total_amount:String(initial.total_amount),notes:initial.notes || ""} : { source: "", client_name: "", total_amount: "", notes: "" });
 
   const add = useMutation({
     mutationFn: async () => {
       if (!form.source.trim()) throw new Error("חסר שם מקור ההכנסה");
-      const { error } = await supabase.from("other_incomes").insert({
+      const payload = {
         source: form.source.trim(),
         client_name: form.client_name.trim() || null,
         total_amount: Number(form.total_amount) || 0,
         notes: form.notes.trim() || null,
-      });
+      };
+      if (!Number.isFinite(payload.total_amount) || payload.total_amount <= 0) throw new Error("יש להזין סכום חיובי תקין");
+      const suspected = findDuplicates([], [...incomes.filter(i=>i.id!==editingId),{...payload,id:editingId || "draft"}]);
+      if (suspected.some(p=>p.firstId===(editingId || "draft") || p.secondId===(editingId || "draft")) && !window.confirm("חשד לכפילות בהכנסה. לשמור בכל זאת ולהעביר לבדיקת כפילויות?")) throw new Error("השמירה בוטלה; ניתן לתקן את ההכנסה");
+      const { error } = editingId ? await supabase.from("other_incomes").update(payload).eq("id", editingId) : await supabase.from("other_incomes").insert(payload);
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("ההכנסה נוספה");
+      toast.success(editingId ? "ההכנסה עודכנה" : "ההכנסה נוספה");
+      setEditingId(null);
       setForm({ source: "", client_name: "", total_amount: "", notes: "" });
       onChanged();
     },
@@ -509,20 +540,23 @@ function IncomesTab({
   });
 
   const remove = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("other_incomes").delete().eq("id", id);
+    mutationFn: async (ids: string[]) => {
+      if (!ids.length) return;
+      const { error } = await supabase.from("other_incomes").delete().in("id", ids);
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("ההכנסה נמחקה");
+      toast.success("ההכנסות ותחנות התשלום שלהן נמחקו");
+      setSelected([]);
       onChanged();
     },
+    onError: () => toast.error("מחיקת ההכנסות נכשלה"),
   });
 
   return (
     <div className="space-y-6">
       <section className="rounded-xl border border-border bg-card p-5">
-        <h2 className="mb-1 font-semibold">הוספת הכנסה שאינה מפרויקט</h2>
+        <h2 className="mb-1 font-semibold">{editingId ? "עריכת הכנסה" : "הוספת הכנסה שאינה מפרויקט"}</h2>
         <p className="mb-4 text-sm text-muted-foreground">
           לדוגמה: עמלות ספקים, ייעוץ חיצוני, השכרת ציוד. ההכנסות נספרות במלואן ב‑P&amp;L של המשרד.
         </p>
@@ -563,17 +597,22 @@ function IncomesTab({
         </div>
         <Button className="mt-4" onClick={() => add.mutate()} disabled={add.isPending}>
           <Plus className="size-4" />
-          הוספת הכנסה
+          {editingId ? "שמירת שינויים" : "הוספת הכנסה"}
         </Button>
+        {editingId && <Button className="ms-2" variant="outline" onClick={()=>{setEditingId(null);setForm({source:"",client_name:"",total_amount:"",notes:""});}}>ביטול</Button>}
       </section>
 
+      <BulkFinanceActions ids={incomes.map(i=>i.id)} selected={selected} onSelect={setSelected} onDelete={ids=>remove.mutate(ids)} busy={remove.isPending} label="הכנסות" />
       {incomes.map((inc) => (
         <IncomeCard
           key={inc.id}
           income={inc}
           milestones={milestones.filter((m) => m.income_id === inc.id)}
           onChanged={onChanged}
-          onRemove={() => remove.mutate(inc.id)}
+          selected={selected.includes(inc.id)}
+          onSelect={v=>setSelected(v ? [...selected,inc.id] : selected.filter(id=>id!==inc.id))}
+          onEdit={()=>{setEditingId(inc.id);setForm({source:inc.source,client_name:inc.client_name || "",total_amount:String(inc.total_amount),notes:inc.notes || ""});document.getElementById("oi-src")?.scrollIntoView({block:"center"});}}
+          onRemove={() => {if(window.confirm("למחוק את ההכנסה וכל תחנות התשלום שלה?")) remove.mutate([inc.id]);}}
         />
       ))}
       {incomes.length === 0 && (
@@ -590,11 +629,13 @@ function IncomeCard({
   milestones,
   onChanged,
   onRemove,
+  selected, onSelect, onEdit,
 }: {
   income: OtherIncome;
   milestones: OtherMilestone[];
   onChanged: () => void;
   onRemove: () => void;
+  selected: boolean; onSelect: (value: boolean) => void; onEdit: () => void;
 }) {
   const [draft, setDraft] = useState({ title: "", amount_type: "percent", amount_value: "", due_date: "" });
 
@@ -653,6 +694,7 @@ function IncomeCard({
     <section className="rounded-xl border border-border bg-card p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <div>
+          <div className="mb-2 flex items-center gap-2"><Checkbox aria-label={`סימון הכנסה ${income.source}`} checked={selected} onCheckedChange={v=>onSelect(v===true)} /><Button variant="link" onClick={onEdit}>עריכת הכנסה</Button></div>
           <h3 className="font-semibold">
             {income.source}
             {income.client_name ? ` · ${income.client_name}` : ""}

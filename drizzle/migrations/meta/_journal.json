@@ -43,6 +43,13 @@
       "when": 1792904817857,
       "tag": "0005_expense_import_conflict_index",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792905174524,
+      "tag": "0006_finance_duplicate_reviews",
+      "breakpoints": true
     }
   ]
 }

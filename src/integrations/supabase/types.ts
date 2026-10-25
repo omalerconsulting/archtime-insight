@@ -88,6 +88,24 @@ export type Database = {
         }
         Relationships: []
       }
+      finance_duplicate_reviews: {
+        Row: {
+          approved_at: string
+          approved_by: string
+          pair_key: string
+        }
+        Insert: {
+          approved_at?: string
+          approved_by: string
+          pair_key: string
+        }
+        Update: {
+          approved_at?: string
+          approved_by?: string
+          pair_key?: string
+        }
+        Relationships: []
+      }
       monthly_reports: {
         Row: {
           created_at: string
