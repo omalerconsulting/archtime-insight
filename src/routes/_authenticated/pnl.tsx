@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { AdminOnly } from "@/components/AdminOnly";
 import { PnlStatement } from "@/components/PnlStatement";
 import { StatementImport } from "@/components/StatementImport";
+import { BulkPaidDateFix } from "@/components/BulkPaidDateFix";
 import { IncomeVatFields } from "@/components/IncomeVatFields";
 import { incomeVat } from "@/lib/income-vat";
 import { ForecastCalculator } from "@/components/ForecastCalculator";
@@ -150,6 +151,7 @@ function PnlPage() {
             <Printer className="size-4" />
             דוח מלא להדפסה / PDF
           </Button>
+          <BulkPaidDateFix />
         </div>
       </div>
 
