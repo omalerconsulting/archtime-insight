@@ -84,8 +84,8 @@ function PnlPage() {
         supabase.from("other_incomes").select("*").order("created_at", { ascending: false }),
         supabase.from("other_income_milestones").select("*").order("sort_order"),
         supabase.from("pnl_adjustments").select("*"),
-        supabase.from("finance_duplicate_reviews").select("pair_key"),
         supabase.from("project_commissions").select("id, project_id, supplier_name, amount, expected_date, paid_amount, paid_date"),
+        supabase.from("finance_duplicate_reviews").select("pair_key"),
       ]);
       for (const r of [projects, milestones, expenses, incomes, incomeMs, adj, comms, reviews]) {
         if (r.error) throw r.error;
@@ -550,6 +550,7 @@ function IncomesTab({
       setSelected([]);
       onChanged();
     },
+    onError: () => toast.error("מחיקת ההכנסות נכשלה"),
   });
 
   return (
