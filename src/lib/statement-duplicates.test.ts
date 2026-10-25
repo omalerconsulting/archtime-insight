@@ -33,6 +33,13 @@ describe("new statement duplicate checks", () => {
   it("checks duplicates within the same new scan", () => {
     expect(checkScanDuplicates(scanned, [], [{ ...scanned, importKey: "second:1" }]).matches).toHaveLength(1);
   });
+  it("checks selected proposals from different documents before saving the batch", () => {
+    const otherDocument = { ...scanned, importKey: "third-document:0" };
+    const check = checkScanDuplicates(scanned, [], [scanned, otherDocument]);
+    expect(check.matches.map(e => e.id)).toEqual(["scan:third-document:0"]);
+    expect(scanNeedsDecision(check, "", "")).toBe(true);
+    expect(scanNeedsDecision(check, "add", check.fingerprint)).toBe(false);
+  });
   it("invalidates review after editing matching fields", () => {
     const before = checkScanDuplicates(scanned, [existing]);
     const after = checkScanDuplicates({ ...scanned, category: "other" }, [existing]);
