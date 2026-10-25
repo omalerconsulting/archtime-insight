@@ -1,5 +1,6 @@
 # Finance management extension
-- [ ] Bulk-select and explicitly approve duplicate reviews, default scan action to additional expense, and verify both flows.
+- [x] Bulk-select and explicitly approve duplicate reviews; default scan action to additional expense without implicit approval. All 20 focused tests passed and build is clean; non-admin access remains blocked.
+- [ ] Verify both bulk approval flows end-to-end in a real administrator session. Blocker: the requesting user's available session has no administrator permissions.
 - [x] Display immutable original transaction text and source location alongside wider multiline editable fields and access to the original file; 21 tests passed, real Excel/PDF source rows verified and editing amount/description preserved original text.
 - [x] Remove the restrictive 200000-character Excel cutoff and compact formatting-only ranges without dropping populated/hidden cells; 19 tests passed and a real 2500-transaction workbook returned both final-document and final-sheet expenses in one scan. Genuine resource/service limits remain explicit, never presented as unlimited.
 - [x] Scan multiple documents together with separate progress, editable reviews, retry/replacement on errors, and cross-document duplicate checks; 17 tests passed, administrator batch save/readback and failed-file replacement preserving other reviews verified, mobile checked and test expenses removed.
