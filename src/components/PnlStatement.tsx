@@ -24,13 +24,13 @@ export function PnlStatement({ rows, expenses, year, adjustment }: { rows: Ledge
   ];
   return <>
     {alerts.length > 0 && <section className="no-print space-y-2 border-s-4 border-warning bg-warning/10 p-4" aria-label="התראות תקינות הוצאות"><h2 className="flex items-center gap-2 font-semibold"><AlertTriangle className="size-4 text-warning" />בדיקות הוצאות — חודשים שהסתיימו</h2><div className="max-h-48 overflow-y-auto"><ul className="space-y-1 text-sm">{alerts.map(a => <li key={a.key}>{MONTH_NAMES[Number(a.month.slice(5))-1]} {year} · {a.text}</li>)}</ul></div><p className="text-xs text-muted-foreground">סימנים לבדיקה בלבד, לא קביעה שחסרה הוצאה. פער משמעותי: 30% ומעלה.</p></section>}
-    <section className="pnl-statement overflow-x-auto border-y border-border">
+    <section className="pnl-statement overflow-x-auto border-y border-border" dir="rtl">
       <table className="w-full min-w-[1550px] text-xs tabular-nums">
         <caption className="p-3 text-start font-semibold">דוח רווח והפסד וצפי — {year}</caption>
         <thead className="bg-muted"><tr><th scope="col" className="sticky start-0 z-10 min-w-52 bg-muted p-3 text-start">סעיף</th>{rows.map((r,i) => <th scope="col" className="p-2" key={r.key}>{MONTH_NAMES[i]}</th>)}<th scope="col" className="p-2">סה״כ שנתי</th></tr></thead>
         <tbody>{lines.map(line => <tr key={line.label} className={`border-t border-border ${line.strong ? "bg-muted/60 font-semibold" : ""}`}>
           <th scope="row" className="sticky start-0 z-10 bg-background p-3 text-start">{line.label}</th>
-          {rows.map(r => <td className="p-1 text-center" key={r.key}>{line.filter ? <Button variant="ghost" className="h-8 px-1 text-xs tabular-nums" aria-label={`${line.label} ${MONTH_NAMES[Number(r.key.slice(5))-1]}`} onClick={() => setDetail({ title: `${line.label} · ${MONTH_NAMES[Number(r.key.slice(5))-1]} ${year}`, items: r.details.filter(line.filter), delta: line.delta?.(r) ?? 0, total: line.get(r), note: r.note })}>{fmtMoney(line.get(r))}</Button> : fmtMoney(line.get(r))}</td>)}
+          {rows.map(r => <td className="p-1 text-center" key={r.key}>{line.filter ? <Button variant="ghost" className="h-8 px-1 text-xs tabular-nums" aria-label={`${line.label} ${MONTH_NAMES[Number(r.key.slice(5))-1]}`} onClick={() => setDetail({ title: `${line.label} · ${MONTH_NAMES[Number(r.key.slice(5))-1]} ${year}`, items: r.details.filter(d => line.filter?.(d) ?? false), delta: line.delta?.(r) ?? 0, total: line.get(r), note: r.note })}>{fmtMoney(line.get(r))}</Button> : fmtMoney(line.get(r))}</td>)}
           <td className="p-2 text-center font-semibold">{fmtMoney(rows.reduce((s,r) => s+line.get(r),0))}</td>
         </tr>)}
         <tr className="no-print border-t border-border"><th className="sticky start-0 bg-background p-3 text-start">תיקון ידני</th>{rows.map(r => <td key={r.key} className="p-2">{adjustment(r)}</td>)}<td /></tr>
@@ -38,7 +38,7 @@ export function PnlStatement({ rows, expenses, year, adjustment }: { rows: Ledge
       </table>
     </section>
     <Dialog open={!!detail} onOpenChange={v => { if (!v) setDetail(null); }}><DialogContent dir="rtl" className="max-h-[85dvh] w-[95vw] max-w-4xl overflow-y-auto" aria-describedby={undefined}>
-      <DialogTitle>{detail?.title}</DialogTitle>
+      <DialogTitle className="ps-8">{detail?.title}</DialogTitle>
       <div className="overflow-x-auto"><table className="w-full min-w-[600px] text-sm"><thead><tr>{["תאריך", "תיאור", "פרויקט / ספק", "סוג", "סכום"].map(h => <th className="p-2 text-start" key={h}>{h}</th>)}</tr></thead><tbody>{detail?.items.map(d => <tr key={d.id} className="border-t border-border"><td className="p-2">{d.date}</td><td className="p-2">{d.description}</td><td className="p-2">{d.party}</td><td className="p-2">{d.bucket === "expenses" ? `${catLabel(d.category || "general")}${d.recurring ? " · קבועה" : ""}` : d.bucket.endsWith("Forecast") ? "צפי" : "בפועל"}</td><td className="p-2">{fmtMoney(d.amount)}</td></tr>)}</tbody></table></div>
       {detail?.items.length === 0 && <p className="text-muted-foreground">אין רשומות מקור בסעיף זה.</p>}
       {!!detail?.delta && <p>התאמה ידנית: {fmtMoney(detail.delta)}{detail.note ? ` · ${detail.note}` : ""}</p>}

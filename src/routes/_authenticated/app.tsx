@@ -93,6 +93,8 @@ import {
 export const Route = createFileRoute("/_authenticated/app")({
   head: () => ({
     meta: [
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
       { title: "דיווח שעות | ניהול שעות ופרויקטים" },
       { name: "description", content: "שעון נוכחות, היעדרויות ופירוק שעות לפי פרויקט." },
       { property: "og:title", content: "דיווח שעות" },

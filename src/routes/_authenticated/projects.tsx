@@ -50,6 +50,8 @@ import {
 export const Route = createFileRoute("/_authenticated/projects")({
   head: () => ({
     meta: [
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
       { title: "ניהול פרויקטים | ניהול שעות ופרויקטים" },
       { name: "description", content: "הוספת פרויקטים, קודי פרויקט, שכר טרחה ותנאי תשלום." },
       { property: "og:title", content: "ניהול פרויקטים" },

@@ -3,6 +3,10 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 export const Route = createFileRoute("/accessibility")({
   head: () => ({
     meta: [
+      { property: "og:title", content: "הצהרת נגישות | ניהול שעות ופרויקטים" },
+      { property: "og:description", content: "הצהרת הנגישות של מערכת ניהול השעות והפרויקטים." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
       { title: "הצהרת נגישות | ניהול שעות ופרויקטים" },
       { name: "description", content: "הצהרת הנגישות של מערכת ניהול השעות והפרויקטים." },
     ],
