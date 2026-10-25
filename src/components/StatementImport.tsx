@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { suggestRecurring } from "@/lib/finance-review";
 import { Checkbox } from "@/components/ui/checkbox";
 import { checkScanDuplicates, scanNeedsDecision, type ScanExpense, type StoredScanExpense } from "@/lib/statement-duplicates";
+import { extractStatementExcel, statementFileKind, statementInputSchema, STATEMENT_MAX_BYTES } from "@/lib/statement-input";
 
 type Proposal = { description: string; vendor: string; amount: number; expense_date: string; category: string; warning: string; selected: boolean; importKey: string; is_recurring: boolean; recurring_until: string; decision: "add" | "skip" | ""; reviewedFingerprint: string };
 const asExpense = (r: Proposal): ScanExpense => ({ ...r, recurring_until: r.is_recurring && r.recurring_until ? r.recurring_until : null });
@@ -38,14 +39,17 @@ export function StatementImport({ expenses, onSaved }: { expenses: Expense[]; on
   const peers = rows.filter(r => r.selected && r.decision !== "skip").map(asExpense);
   const checks = rows.map(r => checkScanDuplicates(asExpense(r), stored, peers));
   const upload = async (file: File) => {
-    if (!["application/pdf", "image/png", "image/jpeg", "image/webp"].includes(file.type) || file.size === 0 || file.size > 10 * 1024 * 1024) { toast.error("בחרו PDF או תמונה עד 10MB"); return; }
+    const kind = statementFileKind(file);
+    if (!kind || file.size === 0 || file.size > STATEMENT_MAX_BYTES) { toast.error("בחרו Excel (.xlsx / .xls), PDF או תמונה עד 10MB"); return; }
     setOpen(true); setBusy(true); setFilename(file.name); setRows([]); setWarnings([]);
     try {
       const bytes = await file.arrayBuffer();
       const digest = await crypto.subtle.digest("SHA-256", bytes);
       const hash = Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, "0")).join("");
-      const base64 = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(",")[1] || ""); reader.onerror = reject; reader.readAsDataURL(file); });
-      const result = await scan({ data: { filename: file.name, mime: file.type as "application/pdf" | "image/png" | "image/jpeg" | "image/webp", base64 } });
+      const payload = kind === "excel"
+        ? { filename: file.name, mime: "text/plain" as const, text: await extractStatementExcel(bytes) }
+        : { filename: file.name, mime: kind, base64: await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(",")[1] || ""); reader.onerror = reject; reader.readAsDataURL(file); }) };
+      const result = await scan({ data: statementInputSchema.parse(payload) });
       if (result.error) throw new Error(result.error);
       const currentExpenses = await loadAllExpenses();
       setStored(currentExpenses);
@@ -76,8 +80,8 @@ export function StatementImport({ expenses, onSaved }: { expenses: Expense[]; on
     finally { setSaving(false); }
   };
   return <>
-    <input ref={input} type="file" className="hidden" accept="application/pdf,image/png,image/jpeg,image/webp" aria-label="מסמך הוצאות לסריקה" onChange={e => { const f = e.target.files?.[0]; if (f) void upload(f); e.target.value = ""; }} />
-    <Button variant="outline" onClick={() => input.current?.click()} disabled={busy}><ScanLine className="size-4" />סריקת דפי חשבון / אשראי</Button>
+    <input ref={input} type="file" className="hidden" accept=".xlsx,.xls,.pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,application/pdf,image/png,image/jpeg,image/webp" aria-label="מסמך הוצאות לסריקה" onChange={e => { const f = e.target.files?.[0]; if (f) void upload(f); e.target.value = ""; }} />
+    <Button variant="outline" onClick={() => input.current?.click()} disabled={busy}><ScanLine className="size-4" />סריקת Excel / PDF / תמונה</Button>
     <Dialog open={open} onOpenChange={v => { if (!busy && !saving) setOpen(v); }}>
       <DialogContent className="max-h-[90dvh] w-[95vw] max-w-6xl overflow-y-auto" dir="rtl" onInteractOutside={e => e.preventDefault()}>
         <DialogTitle className="ps-8">אישור הוצאות מהמסמך</DialogTitle>

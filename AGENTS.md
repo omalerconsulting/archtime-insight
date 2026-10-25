@@ -12,6 +12,7 @@
 ## Financial reporting
 - Build monthly P&L totals and drilldown details from `src/lib/pnl-ledger.ts` together so line items always reconcile to totals, including manual adjustments.
 - Statement scanning uses an admin-verified server function and request-local streamed Lovable AI calls; return proposals only, because every imported transaction requires explicit review and approval.
+- Extract XLS/XLSX sheets in the browser with dynamically loaded SheetJS and send bounded, non-empty text through the same validated administrator scan function; PDFs remain native file inputs and both formats use the same review, fingerprint and duplicate checks.
 - Approved statement rows carry a document transaction fingerprint with a database uniqueness guarantee to prevent repeat uploads from creating duplicate expenses.
 - Statement import paginates all stored expenses after scanning and immediately before saving; reuse finance duplicate rules, retain merged-row fingerprints, and bind each explicit duplicate decision to candidate and match snapshots so edits or newly added matches require fresh review.
 - Derive expense entry-source labels from the preserved statement import fingerprint rather than mutable notes; editing must not change the original source.

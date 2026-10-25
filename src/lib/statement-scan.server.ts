@@ -3,14 +3,17 @@ import { Output, streamText } from "ai";
 import { z } from "zod";
 import { getRequest, setResponseHeader } from "@tanstack/react-start/server";
 import { createLovableAiGatewayRunIdFetch } from "./ai/run-id.server.ts";
+import type { StatementInput } from "./statement-input";
 
 const schema = z.object({ rows: z.array(z.object({ description: z.string(), vendor: z.string(), amount: z.number(), expense_date: z.string(), category: z.string(), warning: z.string() })), warnings: z.array(z.string()) });
-export async function extractStatement(data: { filename: string; mime: string; base64: string }, key: string, categories: { value: string; label: string }[]) {
+export async function extractStatement(data: StatementInput, key: string, categories: { value: string; label: string }[]) {
   const request = getRequest();
   const tracked = createLovableAiGatewayRunIdFetch(request.headers.get("X-Lovable-AIG-Run-ID") ?? undefined);
   const provider = createOpenAI({ baseURL: "https://ai.gateway.lovable.dev/v1", apiKey: key, headers: { "Lovable-API-Key": key, "X-Lovable-AIG-SDK": "vercel-ai-sdk" }, fetch: tracked.fetch });
   try {
-    const media = data.mime === "application/pdf"
+    const media = data.mime === "text/plain"
+      ? { type: "text" as const, text: `תוכן כל גיליונות קובץ Excel (${data.filename}), עם כותרות ועמודות מופרדות בטאבים. קרא את כל הגיליונות; שים לב לעמודות חובה/זכות ולסיכומי רואה חשבון שאינם עסקאות.\n\n${data.text}` }
+      : data.mime === "application/pdf"
       ? { type: "file" as const, filename: data.filename, data: data.base64, mediaType: "application/pdf" }
       : { type: "image" as const, image: new URL(`data:${data.mime};base64,${data.base64}`) };
     const result = streamText({
