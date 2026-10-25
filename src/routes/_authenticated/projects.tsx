@@ -1282,11 +1282,20 @@ function MilestonesPanel({
                                 : m.status === "paid"
                                   ? "pending"
                                   : m.status,
-                          paid_date: v >= full - 0.5 ? todayIso() : null,
+                          paid_date: v >= full - 0.5 ? (m.paid_date ?? todayIso()) : null,
                         },
                       })
                     }
                   />
+                  {collected > 0 && (
+                    <Input
+                      type="date"
+                      className="mt-1 w-36"
+                      aria-label="תאריך התשלום בפועל"
+                      value={m.paid_date ?? ""}
+                      onChange={(e) => update.mutate({ id: m.id, patch: { paid_date: e.target.value || null } })}
+                    />
+                  )}
                 </td>
                 <td className={`p-2 ${remaining === 0 ? "text-emerald-600" : ""}`}>
                   {remaining === 0 ? "נגבה במלואו" : fmtMoney(remaining)}
@@ -1303,7 +1312,7 @@ function MilestonesPanel({
                         id: m.id,
                         patch: {
                           status: v,
-                          paid_date: v === "paid" ? todayIso() : null,
+                          paid_date: v === "paid" ? (m.paid_date ?? todayIso()) : null,
                           paid_amount: v === "paid" ? full : v === "pending" ? 0 : collected,
                         },
                       })

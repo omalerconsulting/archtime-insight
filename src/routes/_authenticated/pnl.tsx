@@ -745,13 +745,13 @@ function IncomeCard({
   });
 
   const update = useMutation({
-    mutationFn: async ({ id, paid, full }: { id: string; paid: number; full: number }) => {
+    mutationFn: async ({ id, paid, full, paidDate }: { id: string; paid: number; full: number; paidDate: string | null }) => {
       const { error } = await supabase
         .from("other_income_milestones")
         .update({
           paid_amount: paid,
           status: paid >= full - 0.5 ? "paid" : paid > 0 ? "invoiced" : "pending",
-          paid_date: paid >= full - 0.5 ? todayIso() : null,
+          paid_date: paid >= full - 0.5 ? (paidDate ?? todayIso()) : null,
         })
         .eq("id", id);
       if (error) throw error;
@@ -825,14 +825,14 @@ function IncomeCard({
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => update.mutate({ id: m.id, paid: full, full })}
+                      onClick={() => update.mutate({ id: m.id, paid: full, full, paidDate: m.paid_date })}
                     >
                       סימון כנגבה
                     </Button>
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => update.mutate({ id: m.id, paid: 0, full })}
+                      onClick={() => update.mutate({ id: m.id, paid: 0, full, paidDate: m.paid_date })}
                     >
                       ביטול גבייה
                     </Button>
