@@ -1,5 +1,5 @@
 # Finance management extension
-- [ ] Show both suspected duplicate records and merge expenses with or without summation; verify persisted results.
+- [x] Show both suspected duplicate records and merge expenses with or without summation; verify persisted results.
 - [x] Income VAT basis, reconciled bank receipts/profit reporting and calculator integration.
 - [x] Repair and verify editing of existing expenses.
 - [x] Bulk selection and confirmed deletion for expenses and additional incomes.
