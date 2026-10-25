@@ -76,8 +76,11 @@ export function StatementImport({ expenses, onSaved }: { expenses: Expense[]; on
     setDocuments(previous => replaceId ? previous.map(d => d.id === replaceId ? (added[0] || d) : d) : [...previous, ...added]);
     setActiveId(added[0]?.id || "");
     setOpen(true); setBusy(true);
+    let serviceBlocked = "";
     try { await runStatementBatch(added, async document => {
       const { file, id } = document;
+      // Once a service-wide block is known, do not send the remaining queued files.
+      if (serviceBlocked) throw new Error(serviceBlocked);
       changeDocument(id, { status: "scanning", error: "" });
       const kind = statementFileKind(file);
       if (!kind || file.size === 0 || file.size > STATEMENT_MAX_BYTES) throw new Error("בחרו קובץ Excel, PDF או תמונה שאינו ריק ועד 10MB. ניתן להחליף את הקובץ ולנסות שוב.");
@@ -91,7 +94,10 @@ export function StatementImport({ expenses, onSaved }: { expenses: Expense[]; on
         ? { filename: file.name, mime: "text/plain" as const, text: await extractStatementExcel(bytes) }
         : { filename: file.name, mime: kind, base64: await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(",")[1] || ""); reader.onerror = reject; reader.readAsDataURL(file); }) };
       const result = await scan({ data: statementInputSchema.parse(payload) });
-      if (result.error) throw new Error(result.error);
+      if (result.error) {
+        if ("errorStatus" in result && [401, 402, 403, 404].includes(Number(result.errorStatus))) serviceBlocked = result.error;
+        throw new Error(result.error);
+      }
       const currentExpenses = await loadAllExpenses();
       setStored(currentExpenses);
       changeDocument(id, { status: "ready", warnings: result.warnings, rows: result.rows.map((r, i) => {
