@@ -49,6 +49,7 @@ export type Database = {
           description: string
           expense_date: string
           id: string
+          import_key: string | null
           is_recurring: boolean
           notes: string | null
           recurring_until: string | null
@@ -63,6 +64,7 @@ export type Database = {
           description?: string
           expense_date?: string
           id?: string
+          import_key?: string | null
           is_recurring?: boolean
           notes?: string | null
           recurring_until?: string | null
@@ -77,6 +79,7 @@ export type Database = {
           description?: string
           expense_date?: string
           id?: string
+          import_key?: string | null
           is_recurring?: boolean
           notes?: string | null
           recurring_until?: string | null
