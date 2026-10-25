@@ -89,12 +89,13 @@ export function buildLedger(data: LedgerData | undefined, year: number) {
   return rows.map(r => {
     const a = data?.adjustments.find(a => a.month === `${r.key}-01`);
     const sourceIncome = r.projectActual + r.projectForecast + r.otherActual + r.otherForecast;
-    const income = a?.income_override != null ? Number(a.income_override) : sourceIncome;
+    const actualIncome = r.projectActual + r.otherActual;
+    const income = a?.income_override != null ? Number(a.income_override) : actualIncome;
     const totalExpenses = a?.expense_override != null ? Number(a.expense_override) : r.expenses;
     const incomeVatTotal = r.details.filter(d => d.bucket !== "expenses").reduce((s,d) => s + (d.vat ?? 0), 0);
     const bankActual = r.details.filter(d => d.bucket === "projectActual" || d.bucket === "otherActual").reduce((s,d) => s + (d.gross ?? d.amount), 0);
     const bankForecast = r.details.filter(d => d.bucket === "projectForecast" || d.bucket === "otherForecast").reduce((s,d) => s + (d.gross ?? d.amount), 0);
-    return { ...r, sourceIncome, income, incomeVatTotal, bankActual, bankForecast, totalExpenses, profit: income - totalExpenses, incomeDelta: income - sourceIncome, expenseDelta: totalExpenses - r.expenses, note: a?.note ?? "", overridden: a?.income_override != null || a?.expense_override != null };
+    return { ...r, sourceIncome, actualIncome, income, incomeVatTotal, bankActual, bankForecast, totalExpenses, profit: income - totalExpenses, incomeDelta: income - actualIncome, expenseDelta: totalExpenses - r.expenses, note: a?.note ?? "", overridden: a?.income_override != null || a?.expense_override != null };
   });
 }
 export type LedgerMonth = ReturnType<typeof buildLedger>[number];
