@@ -1,7 +1,8 @@
 import { z } from "zod";
 
 export const STATEMENT_MAX_BYTES = 10 * 1024 * 1024;
-export const STATEMENT_MAX_TEXT = 200000;
+// Resource guard, not a row/month limit. Upstream model capacity can still reject a full document.
+export const STATEMENT_MAX_TEXT = 10 * 1024 * 1024;
 const filename = z.string().trim().min(1).max(250);
 export const statementInputSchema = z.union([
   z.object({ filename, mime: z.enum(["application/pdf", "image/png", "image/jpeg", "image/webp"]), base64: z.string().min(1).max(14000000) }),
@@ -28,7 +29,7 @@ export async function extractStatementExcel(bytes: ArrayBuffer): Promise<string>
     if (!content.replace(/[\s\t]/g, "")) continue;
     const section = `גיליון: ${name}\n${content}`;
     length += section.length + 2;
-    if (length > STATEMENT_MAX_TEXT) throw new Error("קובץ ה־Excel מכיל יותר מדי נתונים לסריקה אחת; פצלו אותו למספר קבצים לפי חודש.");
+    if (length > STATEMENT_MAX_TEXT) throw new Error("תוכן הקובץ חורג מקיבולת הסריקה הנוכחית. המסמך לא נסרק ולא נשמרו ממנו הוצאות; לא בוצעה סריקה חלקית.");
     sections.push(section);
   }
   if (!sections.length) throw new Error("לא נמצאו נתונים בגיליונות ה־Excel; בדקו שהקובץ אינו ריק או מוגן בסיסמה.");

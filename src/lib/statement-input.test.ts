@@ -33,4 +33,16 @@ describe("bank and accountant statement formats", () => {
     expect(statementInputSchema.safeParse({ filename: "bank.xlsx", mime: "text/plain", text: "תאריך\tחובה\n2026-10-20\t350" }).success).toBe(true);
     expect(statementInputSchema.safeParse({ filename: "bank.xlsx", mime: "text/plain", text: " " }).success).toBe(false);
   });
+  it("includes data beyond the former 200000-character cutoff and the last sheet in one payload", async () => {
+    const book = XLSX.utils.book_new();
+    const source = Array.from({ length: 2500 }, (_, i) => [`2026-10-20`, `תנועת בנק ${i} ${"פירוט מלא ".repeat(8)}`, i + 0.25]);
+    XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([["תאריך", "תיאור", "חובה"], ...source]), "כל התנועות");
+    XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([["עסקה אחרונה", 987.65]]), "גיליון אחרון");
+    const text = await extractStatementExcel(XLSX.write(book, { type: "array", bookType: "xlsx" }));
+    expect(text.length).toBeGreaterThan(200000);
+    expect(text).toContain("תנועת בנק 2499");
+    expect(text).toContain("2499.25");
+    expect(text).toContain("גיליון: גיליון אחרון\nעסקה אחרונה\t987.65");
+    expect(statementInputSchema.safeParse({ filename: "full.xlsx", mime: "text/plain", text }).success).toBe(true);
+  });
 });
