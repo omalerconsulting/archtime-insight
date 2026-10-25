@@ -4,4 +4,4 @@
 - [ ] Persistent duplicate review with correction and explicit approval.
 - [ ] Complete printable P&L with details and current/next-month forecasts.
 - [ ] Verify administrator-only access, calculations and real UI flows.
-- [ ] Administrator forecast calculator: target net profit, existing expenses by accounting category, authority-payment estimates, required revenue and deal/payment planning. Waiting for business tax basis.
+- [ ] Limited-company administrator forecast calculator: target profit, existing expenses by accounting category, entered accountant tax assumptions, retained/dividend scenarios, revenue and deal/installment planning.
