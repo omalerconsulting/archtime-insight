@@ -21,6 +21,9 @@ export function PnlStatement({ rows, expenses, year, adjustment }: { rows: Ledge
     { label: "התאמות הוצאות", get: r => r.expenseDelta },
     { label: "סה״כ הוצאות", get: r => r.totalExpenses, filter: d => d.bucket === "expenses", delta: r => r.expenseDelta, strong: true },
     { label: "רווח / הפסד צפוי", get: r => r.profit, strong: true },
+    { label: "מע״מ על הכנסות מקור (לא ברווח)", get: r => r.incomeVatTotal },
+    { label: "גבייה בבנק — בפועל כולל מע״מ", get: r => r.bankActual },
+    { label: "גבייה בבנק — צפי כולל מע״מ", get: r => r.bankForecast },
   ];
   return <>
     {alerts.length > 0 && <section className="no-print space-y-2 border-s-4 border-warning bg-warning/10 p-4" aria-label="התראות תקינות הוצאות"><h2 className="flex items-center gap-2 font-semibold"><AlertTriangle className="size-4 text-warning" />בדיקות הוצאות — חודשים שהסתיימו</h2><div className="max-h-48 overflow-y-auto"><ul className="space-y-1 text-sm">{alerts.map(a => <li key={a.key}>{MONTH_NAMES[Number(a.month.slice(5))-1]} {year} · {a.text}</li>)}</ul></div><p className="text-xs text-muted-foreground">סימנים לבדיקה בלבד, לא קביעה שחסרה הוצאה. פער משמעותי: 30% ומעלה.</p></section>}
@@ -39,7 +42,7 @@ export function PnlStatement({ rows, expenses, year, adjustment }: { rows: Ledge
     </section>
     <Dialog open={!!detail} onOpenChange={v => { if (!v) setDetail(null); }}><DialogContent dir="rtl" className="max-h-[85dvh] w-[95vw] max-w-4xl overflow-y-auto" aria-describedby={undefined}>
       <DialogTitle className="ps-8">{detail?.title}</DialogTitle>
-      <div className="overflow-x-auto"><table className="w-full min-w-[600px] text-sm"><thead><tr>{["תאריך", "תיאור", "פרויקט / ספק", "סוג", "סכום"].map(h => <th className="p-2 text-start" key={h}>{h}</th>)}</tr></thead><tbody>{detail?.items.map(d => <tr key={d.id} className="border-t border-border"><td className="p-2">{d.date}</td><td className="p-2">{d.description}</td><td className="p-2">{d.party}</td><td className="p-2">{d.bucket === "expenses" ? `${catLabel(d.category || "general")}${d.recurring ? " · קבועה" : ""}` : d.bucket.endsWith("Forecast") ? "צפי" : "בפועל"}</td><td className="p-2">{fmtMoney(d.amount)}</td></tr>)}</tbody></table></div>
+      <div className="overflow-x-auto"><table className="w-full min-w-[600px] text-sm"><thead><tr>{["תאריך", "תיאור", "פרויקט / ספק", "סוג", "סכום לדוח", "מע״מ", "לבנק כולל מע״מ"].map(h => <th className="p-2 text-start" key={h}>{h}</th>)}</tr></thead><tbody>{detail?.items.map(d => <tr key={d.id} className="border-t border-border"><td className="p-2">{d.date}</td><td className="p-2">{d.description}</td><td className="p-2">{d.party}</td><td className="p-2">{d.bucket === "expenses" ? `${catLabel(d.category || "general")}${d.recurring ? " · קבועה" : ""}` : d.bucket.endsWith("Forecast") ? "צפי" : "בפועל"}</td><td className="p-2">{fmtMoney(d.amount)}</td><td className="p-2">{d.bucket === "expenses" ? "—" : fmtMoney(d.vat ?? 0)}</td><td className="p-2">{d.bucket === "expenses" ? "—" : fmtMoney(d.gross ?? d.amount)}</td></tr>)}</tbody></table></div>
       {detail?.items.length === 0 && <p className="text-muted-foreground">אין רשומות מקור בסעיף זה.</p>}
       {!!detail?.delta && <p>התאמה ידנית: {fmtMoney(detail.delta)}{detail.note ? ` · ${detail.note}` : ""}</p>}
       <p className="border-t border-border pt-3 font-semibold">סה״כ: {fmtMoney(detail?.total ?? 0)}</p>

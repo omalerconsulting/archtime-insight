@@ -4,6 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Download, Plus, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { IncomeVatFields } from "@/components/IncomeVatFields";
+import { incomeVat } from "@/lib/income-vat";
 import { AdminOnly } from "@/components/AdminOnly";
 import { SortControls, sortRows, type SortDir } from "@/components/SortControls";
 import { exportCsv } from "@/lib/csv";
@@ -79,6 +81,8 @@ type Milestone = {
 };
 
 type Commission = {
+  vat_included: boolean;
+  vat_rate: number;
   id: string;
   project_id: string;
   supplier_name: string;
@@ -480,6 +484,8 @@ type MilestoneDraft = {
 };
 
 type ProjectRow = {
+  vat_included?: boolean;
+  vat_rate?: number;
   id: string;
   code: string;
   name: string;
@@ -509,6 +515,8 @@ function ProjectDialog({
     name: project?.name ?? "",
     client_name: project?.client_name ?? "",
     fee_total: String(project?.fee_total ?? 0),
+    vat_included: project?.vat_included ?? false,
+    vat_rate: String(project?.vat_rate ?? 18),
     hours_budget: project?.hours_budget ? String(project.hours_budget) : "",
     start_date: project?.start_date ?? "",
     status: project?.status ?? "active",
@@ -530,6 +538,8 @@ function ProjectDialog({
   const [commissions, setCommissions] = useState<
     {
       id?: string;
+      vat_included: boolean;
+      vat_rate: string;
       supplier_name: string;
       amount: string;
       expected_date: string;
@@ -559,6 +569,8 @@ function ProjectDialog({
         .map((c) => ({
           id: c.id,
           supplier_name: c.supplier_name,
+          vat_included: c.vat_included,
+          vat_rate: String(c.vat_rate),
           amount: String(c.amount ?? ""),
           expected_date: c.expected_date ?? "",
           paid_amount: Number(c.paid_amount) ? String(c.paid_amount) : "",
@@ -578,11 +590,14 @@ function ProjectDialog({
 
   const save = useMutation({
     mutationFn: async () => {
+      if (!form.vat_rate.trim() || !Number.isFinite(Number(form.vat_rate)) || Number(form.vat_rate) < 0 || Number(form.vat_rate) > 100 || commissions.some(c => !c.vat_rate.trim() || !Number.isFinite(Number(c.vat_rate)) || Number(c.vat_rate)<0 || Number(c.vat_rate)>100)) throw new Error("vat");
       const payload = {
         code: form.code.trim(),
         name: form.name.trim(),
         client_name: form.client_name.trim() || null,
         fee_total: Number(form.fee_total) || 0,
+        vat_included: form.vat_included,
+        vat_rate: Number(form.vat_rate),
         hours_budget: form.hours_budget ? Number(form.hours_budget) : null,
         start_date: form.start_date || null,
         status: form.status,
@@ -635,6 +650,8 @@ function ProjectDialog({
       const c = valid[i];
       const row = {
         supplier_name: c.supplier_name.trim(),
+        vat_included: c.vat_included,
+        vat_rate: Number(c.vat_rate),
         amount: Number(c.amount) || 0,
         expected_date: c.expected_date || null,
         paid_amount: Math.min(Number(c.paid_amount) || 0, Number(c.amount) || 0),
@@ -734,6 +751,8 @@ function ProjectDialog({
               onChange={(e) => setForm({ ...form, fee_total: e.target.value })}
             />
           </Field>
+          <IncomeVatFields id="project-vat" amount={fee} included={form.vat_included} rate={form.vat_rate} onChange={(included,rate)=>setForm({...form,vat_included:included,vat_rate:rate})} />
+          <p className="text-xs text-muted-foreground sm:col-span-2">תנאי התשלום והסכומים שנגבו לפי בסיס שכר הטרחה שנבחר.</p>
           <Field label="תקציב שעות (לא חובה)" id="hb">
             <Input
               id="hb"
@@ -946,7 +965,7 @@ function ProjectDialog({
                 onClick={() =>
                   setCommissions([
                     ...commissions,
-                    { supplier_name: "", amount: "", expected_date: "", paid_amount: "", paid_date: "" },
+                    { supplier_name: "", amount: "", expected_date: "", paid_amount: "", paid_date: "", vat_included: false, vat_rate: form.vat_rate },
                   ])
                 }
               >
@@ -1005,6 +1024,7 @@ function ProjectDialog({
                 >
                   <Trash2 className="size-4" />
                 </Button>
+                <div className="sm:col-span-4"><IncomeVatFields id={`commission-vat-${idx}`} amount={Number(c.amount)} included={c.vat_included} rate={c.vat_rate} onChange={(included,rate)=>setCommissions(commissions.map((v,i)=>i===idx ? {...v,vat_included:included,vat_rate:rate} : v))} /></div>
                 <div className="flex flex-wrap items-center gap-2 sm:col-span-4">
                   <Label className="text-xs text-muted-foreground">נגבה (₪)</Label>
                   <Input
@@ -1054,8 +1074,7 @@ function ProjectDialog({
             ))}
             {commissions.length > 0 && (
               <p className="text-sm text-muted-foreground">
-                סך עמלות: {fmtMoney(commissionsTotal)} · סך הכנסה מהפרויקט:{" "}
-                {fmtMoney(fee + commissionsTotal)}
+                סך הכנסה לפני מע״מ: {fmtMoney(incomeVat(fee,{vat_included:form.vat_included,vat_rate:Number(form.vat_rate)||0}).net + commissions.reduce((sum,c)=>sum+incomeVat(Number(c.amount)||0,{vat_included:c.vat_included,vat_rate:Number(c.vat_rate)||0}).net,0))}
               </p>
             )}
           </div>
