@@ -1,4 +1,6 @@
 # Finance management extension
+- [ ] Hide deleted staff from report selection and refresh cached selectors after deletion.
+- [ ] Preserve downloadable employee archives, including previously deleted staff, in employee management; verify download and access restrictions.
 - [x] Support configurable month intervals for recurring expenses; existing expenses remain monthly. 42 focused tests passed, including two-month placement and year-end forecasting; administrator UI save, edit and reload verified, test expense deleted; build clean.
 - [x] Repair misleading unreadable-PDF errors by preserving original streamed service failures and halting unsent files on service-wide blocks; 28 focused tests passed, including the actual SDK's wrapped 403 regression; build clean.
 - [ ] Verify a live PDF rescan after workspace AI access is restored. Blocker: workspace AI monthly spending cap is triggered; no further live calls made while blocked.
