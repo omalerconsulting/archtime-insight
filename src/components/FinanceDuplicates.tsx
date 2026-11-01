@@ -59,7 +59,7 @@ export function FinanceDuplicates({ pairs, expenses, incomes, approved, onChange
         <Detail label="תיאור" value={e.description} /><Detail label="סכום" value={fmtMoney(e.amount)} />
         <Detail label="מקור הזנה" value={expenseSourceLabel(e)} />
         <Detail label="ספק" value={e.vendor} /><Detail label="תאריך" value={e.expense_date} />
-        <Detail label="קטגוריה" value={catLabel(e.category)} /><Detail label="סוג" value={e.is_recurring ? "קבועה חודשית" : "זמנית / חד־פעמית"} />
+        <Detail label="קטגוריה" value={catLabel(e.category)} /><Detail label="סוג" value={e.is_recurring ? `קבועה · כל ${e.recurring_every_months ?? 1} חודשים` : "זמנית / חד־פעמית"} />
         {e.is_recurring && <Detail label="עד תאריך" value={e.recurring_until || "ללא תאריך סיום"} />}
         <Detail label="הערות" value={e.notes} />
       </dl>;
@@ -104,8 +104,8 @@ export function FinanceDuplicates({ pairs, expenses, incomes, approved, onChange
             <SelectTrigger aria-label="ההוצאה שפרטיה יישמרו"><SelectValue /></SelectTrigger>
             <SelectContent><SelectItem value={viewing.firstId}>שמירת פרטי הראשונה</SelectItem><SelectItem value={viewing.secondId}>שמירת פרטי השנייה</SelectItem></SelectContent>
           </Select>
-          <p className="text-sm text-muted-foreground">תאריך: {kept.expense_date} · {catLabel(kept.category)} · {kept.is_recurring ? "קבועה חודשית" : "חד־פעמית"}. ההוצאה השנייה תוסר מהתחשיב; תיעוד האיחוד יישמר בהערות.</p>
-          {(kept.is_recurring !== other.is_recurring || kept.expense_date !== other.expense_date || kept.recurring_until !== other.recurring_until) && <p role="alert" className="text-sm text-warning">מועדי ההוצאות או הסוג שלהן שונים. האיחוד יחול לפי התאריך והחזרה החודשית של ההוצאה הנבחרת בלבד.</p>}
+          <p className="text-sm text-muted-foreground">תאריך: {kept.expense_date} · {catLabel(kept.category)} · {kept.is_recurring ? `קבועה · כל ${kept.recurring_every_months ?? 1} חודשים` : "חד־פעמית"}. ההוצאה השנייה תוסר מהתחשיב; תיעוד האיחוד יישמר בהערות.</p>
+          {(kept.is_recurring !== other.is_recurring || kept.expense_date !== other.expense_date || kept.recurring_until !== other.recurring_until || (kept.recurring_every_months ?? 1) !== (other.recurring_every_months ?? 1)) && <p role="alert" className="text-sm text-warning">מועדי ההוצאות או הסוג שלהן שונים. האיחוד יחול לפי התאריך והתדירות של ההוצאה הנבחרת בלבד.</p>}
           <div className="flex flex-wrap gap-2">
             <Button disabled={busy} onClick={() => void merge(true)}><Merge className="size-4" />איחוד עם סכימה · {fmtMoney(mergedExpenseAmount(kept, other, true))}</Button>
             <Button variant="outline" disabled={busy} onClick={() => void merge(false)}><Merge className="size-4" />איחוד ללא סכימה · {fmtMoney(mergedExpenseAmount(kept, other, false))}</Button>
