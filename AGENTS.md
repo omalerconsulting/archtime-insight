@@ -9,6 +9,10 @@
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
 
+## Employee archives
+- Employee deletion remains soft deletion with access revoked; a profile trigger atomically snapshots employee-owned reports, attendance, project hours and minimal project identities into an administrator-only archive before marking deletion, with existing deleted staff backfilled. Exclude office cost rates and all authentication secrets from employee handoffs.
+- Employee archive downloads use browser-generated Excel from the private stored snapshot with a separate preparation and download action, preserving user activation on mobile and avoiding public file URLs; report staff selection excludes deleted profiles and deletion refreshes cached lists.
+
 ## Financial reporting
 - Build monthly P&L totals and drilldown details from `src/lib/pnl-ledger.ts` together so line items always reconcile to totals, including manual adjustments.
 - Statement scanning uses an admin-verified server function and request-local streamed Lovable AI calls; return proposals only, because every imported transaction requires explicit review and approval.

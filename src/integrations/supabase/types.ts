@@ -40,6 +40,30 @@ export type Database = {
           },
         ]
       }
+      employee_archives: {
+        Row: {
+          archived_at: string
+          email: string
+          full_name: string
+          payload: Json
+          user_id: string
+        }
+        Insert: {
+          archived_at?: string
+          email: string
+          full_name: string
+          payload: Json
+          user_id: string
+        }
+        Update: {
+          archived_at?: string
+          email?: string
+          full_name?: string
+          payload?: Json
+          user_id?: string
+        }
+        Relationships: []
+      }
       expenses: {
         Row: {
           amount: number
@@ -661,6 +685,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      employee_archive_payload: { Args: { p_user_id: string }; Returns: Json }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

@@ -37,7 +37,8 @@ export const createEmployee = createServerFn({ method: "POST" })
       },
     });
     if (created.error) throw new Error(created.error.message);
-    const newId = created.data.user!.id;
+    const newId = created.data.user?.id;
+    if (!newId) throw new Error("יצירת המשתמש נכשלה");
 
     await supabaseAdmin
       .from("profiles")
@@ -81,11 +82,14 @@ export const deleteEmployee = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     // היסטוריית העובד (דיווחי שעות ושעות בפרויקטים) נשמרת במלואה.
     // מחיקת חשבון האימות תגרור מחיקת היסטוריה (cascade), לכן חוסמים גישה בלבד.
-    await supabaseAdmin.from("user_roles").delete().eq("user_id", data.user_id);
-    await supabaseAdmin
+    // The profile trigger atomically captures a private archive before deletion.
+    const { data: removed, error: profileError } = await supabaseAdmin
       .from("profiles")
       .update({ is_active: false, is_approved: false, is_deleted: true })
-      .eq("id", data.user_id);
+      .eq("id", data.user_id).select("id").single();
+    if (profileError || !removed) throw new Error("מחיקת העובד ושמירת הארכיון נכשלו");
+    const { error: rolesError } = await supabaseAdmin.from("user_roles").delete().eq("user_id", data.user_id);
+    if (rolesError) throw new Error("הסרת הרשאות העובד נכשלה");
     const banned = await supabaseAdmin.auth.admin.updateUserById(data.user_id, {
       ban_duration: "876000h",
     } as { ban_duration: string });
