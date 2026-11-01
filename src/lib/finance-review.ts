@@ -16,7 +16,7 @@ export function findDuplicates(expenses: Expense[], incomes: ReviewIncome[]): Du
       ? expenseOccurs(a, [a.expense_date, b.expense_date].sort()[1].slice(0, 7)) && expenseOccurs(b, [a.expense_date, b.expense_date].sort()[1].slice(0, 7))
       : a.is_recurring ? expenseOccurs(a, b.expense_date.slice(0, 7)) : b.is_recurring ? expenseOccurs(b, a.expense_date.slice(0, 7)) : a.expense_date === b.expense_date;
     if (dateOverlap && money(a.amount) === money(b.amount) && (same(a.vendor, b.vendor) || same(a.description, b.description))) {
-      add("expense", a, b, `${a.description} · ${a.expense_date}`, `${b.description} · ${b.expense_date}`, a.amount, a.is_recurring || b.is_recurring ? "חפיפה עם הוצאה קבועה באותו חודש" : "סכום ותאריך זהים, וספק או תיאור תואמים", [a, b].sort((x,y) => x.id.localeCompare(y.id)).map(e => [e.amount, e.expense_date, e.description, e.vendor, e.is_recurring, e.recurring_until]));
+      add("expense", a, b, `${a.description} · ${a.expense_date}`, `${b.description} · ${b.expense_date}`, a.amount, a.is_recurring || b.is_recurring ? "חפיפה עם הוצאה קבועה באותו חודש" : "סכום ותאריך זהים, וספק או תיאור תואמים", [a, b].sort((x,y) => x.id.localeCompare(y.id)).map(e => [e.amount, e.expense_date, e.description, e.vendor, e.is_recurring, e.recurring_until, e.recurring_every_months ?? 1]));
     }
   }));
   incomes.forEach((a,i) => incomes.slice(i+1).forEach(b => {

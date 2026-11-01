@@ -23,7 +23,7 @@ export function checkScanDuplicates(row: ScanExpense, stored: StoredScanExpense[
     ...peers.filter(e => e.importKey !== row.importKey).map(e => ({ ...e, id: `scan:${e.importKey}`, notes: null })),
   ];
   const matches = others.filter(e => findDuplicates([candidate, e], []).length > 0);
-  const signature = (e: Expense) => [e.id, e.amount, e.expense_date, e.description, e.vendor, e.category, e.is_recurring, e.recurring_until];
+  const signature = (e: Expense) => [e.id, e.amount, e.expense_date, e.description, e.vendor, e.category, e.is_recurring, e.recurring_until, e.recurring_every_months ?? 1];
   return { blocked, matches, fingerprint: JSON.stringify([blocked, signature(candidate), matches.map(signature).sort((a,b) => String(a[0]).localeCompare(String(b[0])))]) };
 }
 
