@@ -4,6 +4,20 @@ import { findDuplicates, suggestRecurring } from "./finance-review";
 const expense: Expense = { id: "rent", category: "rent", description: "rent", vendor: null, amount: 1000, expense_date: "2027-01-15", is_recurring: true, recurring_until: "2027-03-31", notes: null };
 const empty: LedgerData = { projects: [], milestones: [], commissions: [], incomes: [], incomeMs: [], expenses: [], adjustments: [] };
 describe("accounting rules", () => {
+  it("charges every two months starting with the expense month, not every month", () => {
+    const rows = buildLedger({ ...empty, expenses: [{ ...expense, recurring_every_months: 2, recurring_until: "2027-07-31" }] }, 2027);
+    expect(rows.map(r => r.totalExpenses)).toEqual([1000,0,1000,0,1000,0,1000,0,0,0,0,0]);
+    rows.forEach(r => expect(r.details.reduce((sum, d) => sum + d.amount, 0)).toBe(r.totalExpenses));
+  });
+  it("keeps the two-month anchor across years in reports and forecasts", () => {
+    const data = { ...empty, expenses: [{ ...expense, expense_date: "2026-12-31", recurring_every_months: 2, recurring_until: null }] };
+    const rows = buildLedger(data, 2027);
+    expect(rows.map(r => r.totalExpenses)).toEqual([0,1000,0,1000,0,1000,0,1000,0,1000,0,1000]);
+    expect(rows[1].details[0].date).toBe("2027-02-28");
+    const forecast = forecastMonths(data, "2027-01-15");
+    expect(forecast.current.totalExpenses).toBe(0);
+    expect(forecast.next.totalExpenses).toBe(1000);
+  });
   it("repeats rent in its months only, including the ending month", () => {
     const rows = buildLedger({ ...empty, expenses: [expense] }, 2027);
     expect(rows.map(r => r.totalExpenses)).toEqual([1000,1000,1000,0,0,0,0,0,0,0,0,0]);
