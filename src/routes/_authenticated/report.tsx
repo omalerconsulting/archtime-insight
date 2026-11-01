@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
+import { selectableEmployees, validReportTarget } from "@/lib/employee-directory";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Check, Download, Mail, Printer, Undo2 } from "lucide-react";
@@ -56,21 +57,23 @@ function ReportPage() {
   const [target, setTarget] = useState<string>("me");
 
   const range = useMemo(() => monthRange(year, month), [year, month]);
-  const isAll = target === "all" && isAdmin;
-  const userId = target === "me" ? (user?.id ?? "") : target;
-
   const staffQ = useQuery({
     queryKey: ["staff"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, email")
+        .select("id, full_name, email, is_deleted")
+        .eq("is_deleted", false)
         .order("full_name");
       if (error) throw error;
-      return data;
+      return selectableEmployees(data ?? []);
     },
     enabled: isAdmin,
   });
+
+  const reportTarget = staffQ.data ? validReportTarget(target, staffQ.data) : target;
+  const isAll = reportTarget === "all" && isAdmin;
+  const userId = reportTarget === "me" ? (user?.id ?? "") : reportTarget;
 
   const projectsQ = useQuery({ queryKey: ["projects-dir"], queryFn: fetchProjectDirectory });
   const orgQ = useQuery({
@@ -309,7 +312,7 @@ function ReportPage() {
           {isAdmin && (
             <div className="space-y-1">
               <Label htmlFor="emp">עובד</Label>
-              <Select value={target} onValueChange={setTarget}>
+              <Select value={reportTarget} onValueChange={setTarget}>
                 <SelectTrigger id="emp" className="w-52">
                   <SelectValue />
                 </SelectTrigger>

@@ -6,6 +6,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { UserPlus, KeyRound, Check, Trash2, Pencil } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AdminOnly } from "@/components/AdminOnly";
+import { DeletedEmployeeArchives } from "@/components/DeletedEmployeeArchives";
 import { fmtMoney } from "@/lib/time";
 import { createEmployee, resetEmployeePassword, deleteEmployee } from "@/lib/admin-users.functions";
 import {
@@ -254,10 +255,12 @@ function EmployeesPage() {
     onSuccess: () => {
       toast.success("הפעולה בוצעה על המשתמשים המסומנים");
       setChecked([]);
-      qc.invalidateQueries({ queryKey: ["employees"] });
+      qc.invalidateQueries();
     },
-    onError: (e: unknown) =>
-      toast.error(`הפעולה נכשלה: ${e instanceof Error ? e.message : "שגיאה"}`),
+    onError: (e: unknown) => {
+      qc.invalidateQueries();
+      toast.error(`הפעולה נכשלה: ${e instanceof Error ? e.message : "שגיאה"}`);
+    },
   });
 
   return (
@@ -269,7 +272,10 @@ function EmployeesPage() {
             הוספת משתמשים חדשים, הרשאות מנהל, תעריף עלות לשעה וסטטוס פעילות.
           </p>
         </div>
-        <NewUserDialog onCreated={() => qc.invalidateQueries({ queryKey: ["employees"] })} />
+        <div className="flex flex-wrap gap-2">
+          <DeletedEmployeeArchives />
+          <NewUserDialog onCreated={() => qc.invalidateQueries({ queryKey: ["employees"] })} />
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-4">
@@ -553,7 +559,7 @@ function EmployeesPage() {
                   <DeleteUserButton
                     userId={p.id}
                     name={p.full_name || p.email}
-                    onDeleted={() => qc.invalidateQueries({ queryKey: ["employees"] })}
+                    onDeleted={() => qc.invalidateQueries()}
                   />
                 </td>
               </tr>
@@ -631,7 +637,7 @@ function DeleteUserButton({
       await del({ data: { user_id: userId } });
     },
     onSuccess: () => {
-      toast.success("גישת המשתמש הוסרה. ההיסטוריה נשמרה");
+      toast.success("המשתמש הוסר; נתוניו זמינים בארכיון עובדים שנמחקו");
       onDeleted();
     },
     onError: (e: unknown) =>
