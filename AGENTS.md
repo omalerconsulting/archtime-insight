@@ -9,7 +9,6 @@
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
 
-## Financial reporting
 ## Employee archives
 - Employee deletion remains soft deletion with access revoked; a profile trigger atomically snapshots employee-owned reports, attendance, project hours and minimal project identities into an administrator-only archive before marking deletion, with existing deleted staff backfilled. Exclude office cost rates and all authentication secrets from employee handoffs.
 - Employee archive downloads use browser-generated Excel from the private stored snapshot with a separate preparation and download action, preserving user activation on mobile and avoiding public file URLs; report staff selection excludes deleted profiles and deletion refreshes cached lists.
