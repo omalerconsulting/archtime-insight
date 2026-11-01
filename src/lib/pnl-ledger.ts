@@ -20,7 +20,7 @@ export const EXPENSE_CATEGORIES = [
   { value: "general", label: "הוצאות אחרות" },
 ];
 export const catLabel = (v: string) => EXPENSE_CATEGORIES.find(c => c.value === v)?.label ?? v;
-export type Expense = { id: string; category: string; description: string; vendor: string | null; amount: number; expense_date: string; is_recurring: boolean; recurring_until: string | null; notes: string | null; import_key?: string | null };
+export type Expense = { id: string; category: string; description: string; vendor: string | null; amount: number; expense_date: string; is_recurring: boolean; recurring_every_months?: number; recurring_until: string | null; notes: string | null; import_key?: string | null };
 export type Bucket = "projectActual" | "projectForecast" | "otherActual" | "otherForecast" | "expenses";
 export type LedgerDetail = { id: string; bucket: Bucket; date: string; description: string; party: string; amount: number; gross?: number; vat?: number; category?: string; expenseId?: string; recurring?: boolean };
 type Milestone = { id: string; title: string; amount_type: string; amount_value: number; status: string; paid_amount: number; paid_date: string | null; due_date: string | null };
@@ -34,9 +34,13 @@ export type LedgerData = {
   adjustments: { month: string; income_override: number | null; expense_override: number | null; note: string | null }[];
 };
 export function expenseOccurs(e: Expense, key: string) {
-  return e.is_recurring
-    ? key >= e.expense_date.slice(0, 7) && (!e.recurring_until || `${key}-01` <= e.recurring_until)
-    : key === e.expense_date.slice(0, 7);
+  const startKey = e.expense_date.slice(0, 7);
+  if (!e.is_recurring) return key === startKey;
+  if (key < startKey || (e.recurring_until && `${key}-01` > e.recurring_until)) return false;
+  const [year, month] = key.split("-").map(Number);
+  const [startYear, startMonth] = startKey.split("-").map(Number);
+  const interval = e.recurring_every_months ?? 1;
+  return Number.isInteger(interval) && interval >= 1 && ((year - startYear) * 12 + month - startMonth) % interval === 0;
 }
 export function monthlyExpenseDate(date: string, key: string) {
   const [year, month] = key.split("-").map(Number);

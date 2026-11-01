@@ -53,6 +53,7 @@ export type Database = {
           is_recurring: boolean
           merged_into: string | null
           notes: string | null
+          recurring_every_months: number
           recurring_until: string | null
           updated_at: string
           vendor: string | null
@@ -69,6 +70,7 @@ export type Database = {
           is_recurring?: boolean
           merged_into?: string | null
           notes?: string | null
+          recurring_every_months?: number
           recurring_until?: string | null
           updated_at?: string
           vendor?: string | null
@@ -85,6 +87,7 @@ export type Database = {
           is_recurring?: boolean
           merged_into?: string | null
           notes?: string | null
+          recurring_every_months?: number
           recurring_until?: string | null
           updated_at?: string
           vendor?: string | null
