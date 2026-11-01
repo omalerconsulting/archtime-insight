@@ -71,6 +71,13 @@
       "when": 1792907047495,
       "tag": "0009_harden_expense_merge",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793521828373,
+      "tag": "0010_expense_recurrence_interval",
+      "breakpoints": true
     }
   ]
 }

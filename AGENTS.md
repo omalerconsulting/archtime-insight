@@ -24,6 +24,6 @@
 - Bulk duplicate approval uses the current selected snapshots; the scan's default additional-expense action never counts as approval until explicitly confirmed, and repeat import fingerprints remain blocked.
 - Expense merges use an administrator-checked atomic database function with row locks and snapshot validation; absorbed rows stay excluded from the ledger but retain import fingerprints to prevent repeat statement imports.
 - Full P&L printing uses an isolated document built from the shared ledger, so every month, item and manual adjustment prints regardless of the active tab.
-- Fixed expenses are virtual monthly ledger entries rather than repeated database inserts; clamp their dates to the actual month end.
+- Fixed expenses are virtual ledger entries anchored to expense_date at recurring_every_months intervals (default one), rather than repeated database inserts; share occurrence logic across reports and forecasts and clamp charge dates to the actual month end.
 - The company forecast calculator is a pure reverse-profit model using administrator-entered accountant assumptions; keep VAT cash flows and tax advances separate from corporate-tax expense, and never double-subtract them from profit.
 - Income amounts and payment milestones retain their source VAT basis and rate; use the shared income-VAT conversion for net profit and gross bank receipts. Historical rows default to zero VAT until reviewed, never silently reinterpret them.

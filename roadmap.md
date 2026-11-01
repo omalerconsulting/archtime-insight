@@ -1,4 +1,5 @@
 # Finance management extension
+- [ ] Support configurable month intervals for recurring expenses, preserving existing monthly expenses and verifying save/readback and ledger placement.
 - [x] Repair misleading unreadable-PDF errors by preserving original streamed service failures and halting unsent files on service-wide blocks; 28 focused tests passed, including the actual SDK's wrapped 403 regression; build clean.
 - [ ] Verify a live PDF rescan after workspace AI access is restored. Blocker: workspace AI monthly spending cap is triggered; no further live calls made while blocked.
 - [x] Bulk-select and explicitly approve duplicate reviews; default scan action to additional expense without implicit approval. All 20 focused tests passed and build is clean; non-admin access remains blocked.
