@@ -306,13 +306,14 @@ function ExpensesTab({ expenses, onChanged, initialId }: { expenses: Expense[]; 
   const initial = expenses.find(e=>e.id===initialId);
   const [selected, setSelected] = useState<string[]>([]);
   const [editingId, setEditingId] = useState<string | null>(initial?.id ?? null);
-  const [form, setForm] = useState(initial ? { category: initial.category, description: initial.description, vendor: initial.vendor || "", amount: String(initial.amount), expense_date: initial.expense_date, is_recurring: initial.is_recurring, recurring_until: initial.recurring_until || "", notes: initial.notes || "" } : {
+  const [form, setForm] = useState(initial ? { category: initial.category, description: initial.description, vendor: initial.vendor || "", amount: String(initial.amount), expense_date: initial.expense_date, is_recurring: initial.is_recurring, recurring_every_months: String(initial.recurring_every_months ?? 1), recurring_until: initial.recurring_until || "", notes: initial.notes || "" } : {
     category: "general",
     description: "",
     vendor: "",
     amount: "",
     expense_date: todayIso(),
     is_recurring: false,
+    recurring_every_months: "1",
     recurring_until: "",
     notes: "",
   });
@@ -341,6 +342,7 @@ function ExpensesTab({ expenses, onChanged, initialId }: { expenses: Expense[]; 
       if (!form.description.trim()) throw new Error("חסר תיאור");
       if (!validDate(form.expense_date) || !Number.isFinite(Number(form.amount)) || !form.amount.trim() || Number(form.amount) === 0) throw new Error("יש להזין תאריך וסכום תקינים");
       if (form.is_recurring && form.recurring_until && (!validDate(form.recurring_until) || form.recurring_until < form.expense_date)) throw new Error("תאריך סיום חייב להיות אחרי תאריך ההוצאה");
+      if (form.is_recurring && (!Number.isInteger(Number(form.recurring_every_months)) || Number(form.recurring_every_months) < 1)) throw new Error("תדירות חייבת להיות מספר חודשים שלם וחיובי");
       const payload = {
         category: form.category,
         description: form.description.trim(),
@@ -348,6 +350,7 @@ function ExpensesTab({ expenses, onChanged, initialId }: { expenses: Expense[]; 
         amount: Number(form.amount) || 0,
         expense_date: form.expense_date,
         is_recurring: form.is_recurring,
+        recurring_every_months: form.is_recurring ? Number(form.recurring_every_months) : 1,
         recurring_until: form.is_recurring && form.recurring_until ? form.recurring_until : null,
         notes: form.notes.trim() || null,
       };
@@ -360,7 +363,7 @@ function ExpensesTab({ expenses, onChanged, initialId }: { expenses: Expense[]; 
     onSuccess: () => {
       toast.success(editingId ? "ההוצאה עודכנה" : "ההוצאה נוספה");
       setEditingId(null);
-      setForm({ category: "general", description: "", vendor: "", amount: "", expense_date: todayIso(), is_recurring: false, recurring_until: "", notes: "" });
+      setForm({ category: "general", description: "", vendor: "", amount: "", expense_date: todayIso(), is_recurring: false, recurring_every_months: "1", recurring_until: "", notes: "" });
       onChanged();
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "הוספת ההוצאה נכשלה"),
@@ -381,7 +384,7 @@ function ExpensesTab({ expenses, onChanged, initialId }: { expenses: Expense[]; 
   });
 
   const editExpense = (e: Expense) => {
-    setEditingId(e.id); setForm({ category: e.category, description: e.description, vendor: e.vendor || "", amount: String(e.amount), expense_date: e.expense_date, is_recurring: e.is_recurring, recurring_until: e.recurring_until || "", notes: e.notes || "" });
+    setEditingId(e.id); setForm({ category: e.category, description: e.description, vendor: e.vendor || "", amount: String(e.amount), expense_date: e.expense_date, is_recurring: e.is_recurring, recurring_every_months: String(e.recurring_every_months ?? 1), recurring_until: e.recurring_until || "", notes: e.notes || "" });
     requestAnimationFrame(() => { const input = document.getElementById("ex-desc"); input?.scrollIntoView({ block: "center" }); input?.focus({ preventScroll: true }); });
   };
 
@@ -455,8 +458,14 @@ function ExpensesTab({ expenses, onChanged, initialId }: { expenses: Expense[]; 
           </div>
           <div className="flex items-center gap-3">
             <Label htmlFor="ex-rec">סוג הוצאה</Label>
-            <Select value={form.is_recurring ? "fixed" : "temporary"} onValueChange={v=>setForm({...form,is_recurring:v==="fixed"})}><SelectTrigger id="ex-rec"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="fixed">קבועה חודשית</SelectItem><SelectItem value="temporary">זמנית / חד־פעמית</SelectItem></SelectContent></Select>
+            <Select value={form.is_recurring ? "fixed" : "temporary"} onValueChange={v=>setForm({...form,is_recurring:v==="fixed"})}><SelectTrigger id="ex-rec"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="fixed">קבועה / מחזורית</SelectItem><SelectItem value="temporary">זמנית / חד־פעמית</SelectItem></SelectContent></Select>
           </div>
+          {form.is_recurring && (
+            <div className="space-y-2">
+              <Label htmlFor="ex-interval">תדירות — כל כמה חודשים</Label>
+              <Input id="ex-interval" type="number" min={1} step={1} value={form.recurring_every_months} onChange={e => setForm({ ...form, recurring_every_months: e.target.value })} />
+            </div>
+          )}
           <div className="space-y-2 sm:col-span-2">
             <Label htmlFor="ex-notes">הערות</Label>
             <Textarea
@@ -471,10 +480,9 @@ function ExpensesTab({ expenses, onChanged, initialId }: { expenses: Expense[]; 
           <Plus className="size-4" />
           {editingId ? "שמירת שינויים" : "הוספת הוצאה"}
         </Button>
-        {editingId && <Button className="ms-2 mt-4" variant="outline" onClick={() => { setEditingId(null); setForm({ category: "general", description: "", vendor: "", amount: "", expense_date: todayIso(), is_recurring: false, recurring_until: "", notes: "" }); }}>ביטול</Button>}
+        {editingId && <Button className="ms-2 mt-4" variant="outline" onClick={() => { setEditingId(null); setForm({ category: "general", description: "", vendor: "", amount: "", expense_date: todayIso(), is_recurring: false, recurring_every_months: "1", recurring_until: "", notes: "" }); }}>ביטול</Button>}
       </section>
 
-      <p className="text-sm text-muted-foreground">קבועה משובצת אוטומטית מדי חודש עד תאריך הסיום; זמנית רק בחודש שנבחר. הסיווג הראשוני מוצע לפי הקטגוריה וניתן לשינוי.</p>
       <BulkFinanceActions ids={filtered.map(e=>e.id)} selected={selected} onSelect={setSelected} onDelete={ids=>remove.mutate(ids)} busy={remove.isPending} label="הוצאות" />
       <section className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card p-4">
         <div className="space-y-1">
@@ -551,7 +559,7 @@ function ExpensesTab({ expenses, onChanged, initialId }: { expenses: Expense[]; 
                 <td className="p-2">{fmtMoney(Number(e.amount))}</td>
                 <td className="p-2">
                   {e.is_recurring
-                    ? `קבועה חודשית${e.recurring_until ? ` · עד ${e.recurring_until}` : ""}`
+                    ? `קבועה · ${(e.recurring_every_months ?? 1) === 1 ? "כל חודש" : `כל ${e.recurring_every_months} חודשים`}${e.recurring_until ? ` · עד ${e.recurring_until}` : ""}`
                     : "חד פעמית"}
                 </td>
                 <td className="p-2"><ExpenseSourceBadge expense={e} /></td>
